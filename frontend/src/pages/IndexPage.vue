@@ -1,5 +1,5 @@
 <template>
-<q-page class="row items-center justify-evenly q-pa-lg q-gutter-md">
+  <q-page class="row items-center justify-evenly q-pa-lg q-gutter-md">
     <example-component
       title="Example component"
       active
@@ -12,10 +12,8 @@
         <div class="text-h6">Backend ping</div>
       </q-card-section>
       <q-card-section>
-        <div v-if="apiState === 'loading'">Запрос выполняется…</div>
-        <div v-else-if="apiState === 'error'" class="text-negative">
-          Ошибка: {{ apiError }}
-        </div>
+        <div v-if="apiState === 'loading'">Loading...</div>
+        <div v-else-if="apiState === 'error'" class="text-negative">Error: {{ apiError }}</div>
         <pre v-else class="api-response">{{ apiPayload }}</pre>
       </q-card-section>
     </q-card>
@@ -60,7 +58,8 @@ const apiState = ref<ApiState>('idle');
 const apiPayload = ref<string>('');
 const apiError = ref<string>('');
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:3333';
+const apiBaseUrl =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:3333';
 
 onMounted(async () => {
   apiState.value = 'loading';
