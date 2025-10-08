@@ -9,6 +9,45 @@
 
         <q-card-section class="form-section">
           <q-form class="auth-form" @submit.prevent="handleRegister">
+            <div class="row q-col-gutter-sm">
+              <div class="col">
+                <q-input
+                  v-model="name"
+                  label="First name"
+                  dense
+                  outlined
+                  class="dark-field"
+                  autocomplete="given-name"
+                  :error="nameTouched && Boolean(nameError)"
+                  :error-message="nameTouched ? nameError : ''"
+                  @blur="nameTouched = true"
+                />
+              </div>
+              <div class="col">
+                <q-input
+                  v-model="surname"
+                  label="Last name"
+                  dense
+                  outlined
+                  class="dark-field"
+                  autocomplete="family-name"
+                  :error="surnameTouched && Boolean(surnameError)"
+                  :error-message="surnameTouched ? surnameError : ''"
+                  @blur="surnameTouched = true"
+                />
+              </div>
+            </div>
+            <q-input
+              v-model="nickname"
+              label="Nickname"
+              dense
+              outlined
+              class="dark-field"
+              autocomplete="nickname"
+              :error="nicknameTouched && Boolean(nicknameError)"
+              :error-message="nicknameTouched ? nicknameError : ''"
+              @blur="nicknameTouched = true"
+            />
             <q-input
               v-model="email"
               type="email"
@@ -20,17 +59,6 @@
               :error="emailTouched && Boolean(emailError)"
               :error-message="emailTouched ? emailError : ''"
               @blur="emailTouched = true"
-            />
-            <q-input
-              v-model="fullName"
-              label="Display name"
-              dense
-              outlined
-              class="dark-field"
-              autocomplete="name"
-              :error="fullNameTouched && Boolean(fullNameError)"
-              :error-message="fullNameTouched ? fullNameError : ''"
-              @blur="fullNameTouched = true"
             />
             <q-input
               v-model="password"
@@ -82,94 +110,86 @@
 </template>
 
 <script setup lang="ts">
-defineOptions({
-  name: 'RegisterPage',
-});
+defineOptions({ name: 'RegisterPage' });
 
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
 
+const name = ref('');
+const surname = ref('');
+const nickname = ref('');
 const email = ref('');
-const fullName = ref('');
 const password = ref('');
 const confirmPassword = ref('');
 
+const nameTouched = ref(false);
+const surnameTouched = ref(false);
+const nicknameTouched = ref(false);
 const emailTouched = ref(false);
-const fullNameTouched = ref(false);
 const passwordTouched = ref(false);
 const confirmPasswordTouched = ref(false);
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
 
-const emailError = computed(() => {
-  if (!email.value.trim()) {
-    return 'Email is required';
-  }
-
-  if (!emailPattern.test(email.value.trim())) {
-    return 'Enter a valid email address';
-  }
-
+const nameError = computed(() => {
+  if (!name.value.trim()) return 'First name is required';
+  if (name.value.trim().length < 2) return 'Must be at least 2 characters';
   return '';
 });
 
-const fullNameError = computed(() => {
-  if (!fullName.value.trim()) {
-    return 'Display name is required';
-  }
+const surnameError = computed(() => {
+  if (!surname.value.trim()) return 'Surname is required';
+  if (surname.value.trim().length < 2) return 'Must be at least 2 characters';
+  return '';
+});
 
-  if (fullName.value.trim().length < 2) {
-    return 'Display name must be at least 2 characters';
-  }
+const nicknameError = computed(() => {
+  if (!nickname.value.trim()) return 'Nickname is required';
+  if (nickname.value.trim().length < 2) return 'Must be at least 2 characters';
+  return '';
+});
 
+const emailError = computed(() => {
+  if (!email.value.trim()) return 'Email is required';
+  if (!emailPattern.test(email.value.trim())) return 'Enter a valid email address';
   return '';
 });
 
 const passwordError = computed(() => {
-  if (!password.value) {
-    return 'Password is required';
-  }
-
-  if (password.value.length < 6) {
-    return 'Password must be at least 6 characters';
-  }
-
+  if (!password.value) return 'Password is required';
+  if (password.value.length < 6) return 'Password must be at least 6 characters';
   return '';
 });
 
 const confirmPasswordError = computed(() => {
-  if (!confirmPassword.value) {
-    return 'Repeat password is required';
-  }
-
-  if (confirmPassword.value !== password.value) {
-    return 'Passwords must match';
-  }
-
+  if (!confirmPassword.value) return 'Repeat password is required';
+  if (confirmPassword.value !== password.value) return 'Passwords must match';
   return '';
 });
 
 const isRegisterValid = computed(
   () =>
+    !nameError.value &&
+    !surnameError.value &&
+    !nicknameError.value &&
     !emailError.value &&
-    !fullNameError.value &&
     !passwordError.value &&
     !confirmPasswordError.value,
 );
 
 function handleRegister() {
+  nameTouched.value = true;
+  surnameTouched.value = true;
+  nicknameTouched.value = true;
   emailTouched.value = true;
-  fullNameTouched.value = true;
   passwordTouched.value = true;
   confirmPasswordTouched.value = true;
 
-  if (!isRegisterValid.value) {
-    return;
-  }
+  if (!isRegisterValid.value) return;
 
-  // Registration logic will be implemented once the backend is ready
+  // Registration logic goes here
 }
 
 function goToLogin() {
@@ -181,7 +201,13 @@ function goToLogin() {
 .register-page {
   min-height: 100vh;
   padding: 48px 24px;
-  background: radial-gradient(circle at top right, #5865f2 0%, rgba(88, 101, 242, 0.12) 30%, #1e1f22 80%, #1a1b1e 100%);
+  background: radial-gradient(
+    circle at top right,
+    #5865f2 0%,
+    rgba(88, 101, 242, 0.12) 30%,
+    #1e1f22 80%,
+    #1a1b1e 100%
+  );
   color: #f2f3f5;
 }
 
