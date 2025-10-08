@@ -9,9 +9,9 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/workspace',
     component: () => import('layouts/WorkspaceLayout.vue'),
-    children: [
-    { path: '', component: () => import('pages/WorkspacePage.vue') }
-  ],
+    children: [{ path: '', component: () => import('pages/WorkspacePage.vue') }],
+  },
+  {
     path: '/login',
     component: () => import('layouts/AuthLayout.vue'),
     children: [{ path: '', component: () => import('pages/LoginPage.vue') }],
