@@ -1,8 +1,9 @@
 <template>
   <div class="sl-chat">
+  <sl-chat-header chat-title="Alice" />
     <q-scroll-area
       ref="scrollArea"
-      class="q-pa-md scroll-area"
+      class="q-pa-md"
       style="flex: 1;"
       :horizontal="false"
     >
@@ -32,7 +33,7 @@
 import type { Message } from 'src/types'
 import { ref, nextTick } from 'vue'
 import SlMessagesList from './SlMessagesList.vue'
-
+import SlChatHeader from './SlChatHeader.vue'
 const currentUserId = 1
 const messages = ref<Message[]>([
   { id: 1, chatId: 100, senderId: 2, text: 'Hey there!' },
@@ -104,10 +105,5 @@ async function sendMessage() {
   padding: 8px 16px;
   font-weight: 600;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.send-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.4);
 }
 </style>
