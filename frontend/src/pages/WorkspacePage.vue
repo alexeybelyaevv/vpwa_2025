@@ -20,8 +20,15 @@ import SlList from 'src/components/SlList.vue'
 import SlChat from 'src/components/SlChat.vue'
 import type { Chat } from 'src/types'
 
-const channels: Chat[] = [ {id: 1, title: 'general'}, {id: 2, title: 'random'}, {id: 3, title: 'projects'} ]
-const directChats: Chat[] = [ {id: 1, title: 'Oleksii'}, {id: 2, title: 'Sofiia'} ]
+const channels: Chat[] = [
+  { id: 1, title: 'general', type: 'public' },
+  { id: 2, title: 'random', type: 'public' },
+  { id: 3, title: 'projects', type: 'private' }
+]
+const directChats: Chat[] = [
+  { id: 1, title: 'Oleksii', type: 'private' },
+  { id: 2, title: 'Sofiia', type: 'private' }
+]
 
 </script>
 

@@ -12,6 +12,7 @@
 
     <div class="row items-center q-pa-sm input-container">
       <q-input
+        ref="inputRef"
         filled
         v-model="message"
         placeholder="Type a message..."
@@ -19,7 +20,27 @@
         class="col message-input"
         input-class="text-white"
         @keyup.enter="sendMessage"
-      />
+        @update:model-value="handleCommands"
+      >
+      <template v-slot:append>
+          <q-menu
+            ref="menu"
+            v-model="showMenu"
+            auto-close
+            no-parent-event
+            :target="inputElement"
+            anchor="bottom left"
+            self="top left"
+            no-focus
+          >
+            <q-list style="min-width: 200px">
+              <q-item v-for="cmd in availableCommands" :key="cmd" clickable @click="selectCommand(cmd)">
+                <q-item-section>{{ cmd }}</q-item-section>
+              </q-item>
+            </q-list>
+          </q-menu>
+        </template>
+      </q-input>
       <q-btn
         class="q-ml-sm send-btn"
         label="Send"
@@ -31,18 +52,38 @@
 
 <script setup lang="ts">
 import type { Message } from 'src/types'
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
 import SlMessagesList from './SlMessagesList.vue'
 import SlChatHeader from './SlChatHeader.vue'
+import { QInput } from 'quasar'
 const currentUserId = 1
 const messages = ref<Message[]>([
   { id: 1, chatId: 100, senderId: 2, text: 'Hey there!' },
   { id: 2, chatId: 100, senderId: 1, text: 'Hi Alice 👋' }
 ])
-
+const inputRef = ref<QInput | null>(null)
+const inputElement = computed(() => {
+  return inputRef.value?.$el.querySelector('input') || inputRef.value?.$el
+})
 const message = ref('')
 const scrollArea = ref()
-
+const availableCommands = computed(() => {
+  const commands = ['/join channelName [private]']
+  return commands
+})
+function selectCommand(cmd: string) {
+  message.value = cmd
+  showMenu.value = false
+}
+const showMenu = ref(false)
+function handleCommands() {
+  console.log("hi")
+  if (message.value.startsWith('/')) {
+    showMenu.value = true
+  } else {
+    showMenu.value = false
+  }
+}
 async function sendMessage() {
   if (message.value.trim()) {
     const newMessage: Message = {
@@ -94,10 +135,6 @@ async function sendMessage() {
   transition:  0.3s ease;
 }
 
-.message-input:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .send-btn {
   background: linear-gradient(90deg, #4a00e0, #8e2de2);
   color: #ffffff;
@@ -106,4 +143,4 @@ async function sendMessage() {
   font-weight: 600;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-</style>
+</style> 
