@@ -34,7 +34,7 @@
             no-focus
           >
             <q-list style="min-width: 200px">
-              <q-item v-for="cmd in availableCommands" :key="cmd" clickable @click="selectCommand(cmd)">
+              <q-item v-for="(cmd, index) in availableCommands" :key="cmd" clickable @click="selectCommand(cmd)" :class="{ highlighted: index === highlightedIndex }">
                 <q-item-section>{{ cmd }}</q-item-section>
               </q-item>
             </q-list>
@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import SlMessagesList from './SlMessagesList.vue'
 import SlChatHeader from './SlChatHeader.vue'
 import { useChatStore } from 'src/stores/chat-commands-store'
@@ -67,6 +67,7 @@ const message = ref('')
 const scrollArea = ref()
 const showMenu = ref(false)
 const inputRef = ref<QInput | null>(null)
+const highlightedIndex = ref(-1)
 
 const inputElement = computed(() => {
   return inputRef.value?.$el.querySelector('input') || inputRef.value?.$el
@@ -93,11 +94,13 @@ const availableCommands = computed(() => {
 function selectCommand(cmd: string) {
   message.value = cmd
   showMenu.value = false
+  highlightedIndex.value = -1
 }
 
 function handleCommands() {
   showMenu.value = message.value.startsWith('/')
 }
+
 async function sendMessage() {
   if (!message.value.trim()) return
 
@@ -115,6 +118,34 @@ async function sendMessage() {
     scroll.scrollTop = scroll.scrollHeight
   }
 }
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!showMenu.value) return
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    highlightedIndex.value = (highlightedIndex.value + 1) % availableCommands.value.length
+    if (highlightedIndex.value >= 0 && highlightedIndex.value < availableCommands.value.length) {
+      message.value = availableCommands.value[highlightedIndex.value]!
+    }
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    highlightedIndex.value = (highlightedIndex.value - 1 + availableCommands.value.length) % availableCommands.value.length
+    if (highlightedIndex.value >= 0 && highlightedIndex.value < availableCommands.value.length) {
+      message.value = availableCommands.value[highlightedIndex.value]!
+    }
+  } 
+}
+
+watch(showMenu, (newValue) => {
+  if (newValue) {
+    document.addEventListener('keydown', handleKeydown)
+    highlightedIndex.value = 0
+  } else {
+    document.removeEventListener('keydown', handleKeydown)
+    highlightedIndex.value = -1
+  }
+})
 </script>
 
 <style scoped>
@@ -155,5 +186,10 @@ async function sendMessage() {
   padding: 8px 16px;
   font-weight: 600;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.highlighted {
+  background-color: #4a00e0 !important;
+  color: #ffffff !important;
 }
 </style>
