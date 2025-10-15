@@ -1,13 +1,13 @@
 <template>
   <div class="sl-chat">
-  <sl-chat-header chat-title="Alice" />
+    <sl-chat-header :chat-title="chatTitle" />
     <q-scroll-area
       ref="scrollArea"
       class="q-pa-md"
       style="flex: 1;"
       :horizontal="false"
     >
-      <sl-messages-list :messages="messages" :current-user-id="currentUserId" />
+      <sl-messages-list :messages="currentMessages" :current-user="chatCommandsStore.state.currentUser" />
     </q-scroll-area>
 
     <div class="row items-center q-pa-sm input-container">
@@ -22,7 +22,7 @@
         @keyup.enter="sendMessage"
         @update:model-value="handleCommands"
       >
-      <template v-slot:append>
+        <template v-slot:append>
           <q-menu
             ref="menu"
             v-model="showMenu"
@@ -51,55 +51,68 @@
 </template>
 
 <script setup lang="ts">
-import type { Message } from 'src/types'
-import { ref, nextTick, computed } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import SlMessagesList from './SlMessagesList.vue'
 import SlChatHeader from './SlChatHeader.vue'
+import { useChatStore } from 'src/stores/chat-commands-store'
 import { QInput } from 'quasar'
-const currentUserId = 1
-const messages = ref<Message[]>([
-  { id: 1, chatId: 100, senderId: 2, text: 'Hey there!' },
-  { id: 2, chatId: 100, senderId: 1, text: 'Hi Alice 👋' }
-])
+
+const chatCommandsStore = useChatStore()
+
+onMounted(() => {
+  chatCommandsStore.initialize()
+})
+
+const message = ref('')
+const scrollArea = ref()
+const showMenu = ref(false)
 const inputRef = ref<QInput | null>(null)
+
 const inputElement = computed(() => {
   return inputRef.value?.$el.querySelector('input') || inputRef.value?.$el
 })
-const message = ref('')
-const scrollArea = ref()
-const availableCommands = computed(() => {
-  const commands = ['/join channelName [private]']
-  return commands
+
+const currentMessages = computed(() => {
+  return chatCommandsStore.state.currentChannel !== null
+    ? chatCommandsStore.state.messages[chatCommandsStore.state.currentChannel] || []
+    : []
 })
+
+const chatTitle = computed(() => {
+  if (chatCommandsStore.state.currentChannel === null) {
+    return 'No Channel Selected'
+  }
+  const channel = chatCommandsStore.getChannelByTitle(chatCommandsStore.state.currentChannel)
+  return channel ? channel.title : 'No Channel Selected'
+})
+
+const availableCommands = computed(() => {
+  return ['/join channelName private', '/quit', '/cancel']
+})
+
 function selectCommand(cmd: string) {
   message.value = cmd
   showMenu.value = false
 }
-const showMenu = ref(false)
+
 function handleCommands() {
-  console.log("hi")
-  if (message.value.startsWith('/')) {
-    showMenu.value = true
-  } else {
-    showMenu.value = false
-  }
+  showMenu.value = message.value.startsWith('/')
 }
 async function sendMessage() {
-  if (message.value.trim()) {
-    const newMessage: Message = {
-      id: Date.now(),
-      chatId: 100,
-      senderId: currentUserId,
-      text: message.value.trim()
-    }
-    messages.value.push(newMessage)
-    message.value = ''
+  if (!message.value.trim()) return
 
-    await nextTick()
-    const scroll = scrollArea.value?.getScrollTarget()
-    if (scroll) {
-      scroll.scrollTop = scroll.scrollHeight
-    }
+  if (message.value.startsWith('/')) {
+    chatCommandsStore.processCommand(message.value)
+    showMenu.value = false
+  } else if (chatCommandsStore.state.currentChannel !== null) {
+    chatCommandsStore.sendMessage(chatCommandsStore.state.currentChannel, message.value.trim())
+  }
+
+  message.value = ''
+  await nextTick()
+  const scroll = scrollArea.value?.getScrollTarget()
+  if (scroll) {
+    scroll.scrollTop = scroll.scrollHeight
   }
 }
 </script>
@@ -132,7 +145,7 @@ async function sendMessage() {
 .message-input {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
-  transition:  0.3s ease;
+  transition: 0.3s ease;
 }
 
 .send-btn {
@@ -143,4 +156,4 @@ async function sendMessage() {
   font-weight: 600;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-</style> 
+</style>

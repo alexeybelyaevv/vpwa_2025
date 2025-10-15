@@ -1,7 +1,7 @@
 <template>
   <div class="messages-container">
-    <div v-for="msg in messages" :key="msg.id" class="q-mb-sm message-text" :class="{ 'own-message': msg.senderId === currentUserId }">
-      <span class="sender"><strong>{{ msg.senderId === currentUserId ? 'You' : 'Alice' }}:</strong></span>
+    <div v-for="msg in messages" :key="msg.id" class="q-mb-sm message-text" :class="{ 'own-message': msg.senderId === currentUser }">
+      <span class="sender"><strong>{{ msg.senderId === currentUser ? 'You' : msg.senderId }}:</strong></span>
       <span class="message-content">{{ msg.text }}</span>
     </div>
   </div>
@@ -13,7 +13,7 @@ import { defineProps } from 'vue'
 
 defineProps<{
   messages: Message[]
-  currentUserId: number
+  currentUser: string
 }>()
 </script>
 
