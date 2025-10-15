@@ -44,7 +44,24 @@ export const useChatStore = defineStore('chat', () => {
       state.currentChannel = title
     }
   }
+  function invite(nickName: string) {
+    if (!state.currentChannel) return
+    const channelTitle = state.currentChannel
+    const channel = getChannelByTitle(channelTitle)
+    if (!channel || channel.banned.includes(nickName) || channel.members.includes(nickName)) return
 
+    const isAdmin = channel.admin === state.currentUser
+    if (channel.type === 'private' && !isAdmin) return
+    channel.members.push(nickName)
+    if (!state.messages[channelTitle]) state.messages[channelTitle] = []
+    state.messages[channelTitle].push({
+        id: Date.now(),
+        chatId: channelTitle,
+        senderId: state.currentUser,
+        text: `${nickName} was invited to ${channelTitle}`,
+    })
+    console.log(getChannelByTitle(state.currentChannel)?.members)
+  }
   function quit() {
     if (!state.currentChannel) return
     const channel = getChannelByTitle(state.currentChannel)
@@ -77,6 +94,10 @@ export const useChatStore = defineStore('chat', () => {
           const isPrivate = opt ? /private|\[private\]/.test(opt) : false
           joinChannel(arg, isPrivate)
         }
+        break
+      case 'invite':
+        if(arg)
+            invite(arg)
         break
       case 'quit':
         quit()
@@ -124,18 +145,18 @@ export const useChatStore = defineStore('chat', () => {
       sendMessage('projects', 'Only team members can join.')
     }
 
-    createChannel('Oleksii', 'private')
+    createChannel('VPWA', 'private')
     const oleksiiChat = getChannelByTitle('Oleksii')
     if (oleksiiChat) {
-      sendMessage('Oleksii', 'Hey Oleksii, how’s it going?')
-      sendMessage('Oleksii', 'Let’s catch up soon!')
+      sendMessage('VPWA', 'Hey Oleksii, how’s it going?')
+      sendMessage('VPWA', 'Let’s catch up soon!')
     }
 
-    createChannel('Sofiia', 'private')
+    createChannel('IAU', 'private')
     const sofiiaChat = getChannelByTitle('Sofiia')
     if (sofiiaChat) {
-      sendMessage('Sofiia', 'Hi Sofiia, got any updates?')
-      sendMessage('Sofiia', 'Working on anything cool?')
+      sendMessage('IAU', 'Hi Sofiia, got any updates?')
+      sendMessage('IAU', 'Working on anything cool?')
     }
   }
   function getAvailableCommands(): string[] {
@@ -173,5 +194,6 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     initialize,
     getAvailableCommands,
+    invite,
   }
 })
