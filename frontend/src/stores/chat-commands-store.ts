@@ -7,7 +7,7 @@ export const useChatStore = defineStore('chat', () => {
     channels: [] as Chat[],
     messages: {} as Record<string, Message[]>,
     currentChannel: null as string | null,
-    currentUser: 'Sofiia' as string,
+    currentUser: 'Alex' as string,
   })
 
   function getChannelByTitle(title: string): Chat | undefined {
@@ -138,6 +138,29 @@ export const useChatStore = defineStore('chat', () => {
       sendMessage('Sofiia', 'Working on anything cool?')
     }
   }
+  function getAvailableCommands(): string[] {
+    const commands = ['/join channelName [private]']
+    if (!state.currentChannel) return commands
+
+    const channel = getChannelByTitle(state.currentChannel)
+    if (!channel || !channel.members.includes(state.currentUser)) return commands
+
+    commands.push('/cancel')
+    const isAdmin = channel.admin === state.currentUser
+    if (isAdmin) {
+        commands.push('/quit')
+    }
+    if (channel.type === 'public' || isAdmin) {
+        commands.push('/invite nickName')
+    }
+    if (channel.type === 'private' && isAdmin) {
+        commands.push('/revoke nickName')
+    }
+    commands.push('/kick nickName')
+    commands.push('/list')
+
+    return commands
+    }
 
   return {
     state,
@@ -149,5 +172,6 @@ export const useChatStore = defineStore('chat', () => {
     processCommand,
     sendMessage,
     initialize,
+    getAvailableCommands,
   }
 })

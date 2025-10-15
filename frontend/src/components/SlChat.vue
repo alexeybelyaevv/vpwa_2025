@@ -88,7 +88,7 @@ const chatTitle = computed(() => {
 })
 
 const availableCommands = computed(() => {
-  return ['/join channelName private', '/quit', '/cancel']
+  return chatCommandsStore.getAvailableCommands()
 })
 
 function selectCommand(cmd: string) {
