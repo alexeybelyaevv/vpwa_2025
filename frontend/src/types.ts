@@ -13,4 +13,5 @@ export interface Message {
   chatId: string
   senderId: string
   text: string
+  mentioned?: string[]
 }

@@ -191,17 +191,25 @@ export const useChatStore = defineStore('chat', () => {
 
   function sendMessage(channelTitle: string, text: string) {
     if (!state.messages[channelTitle]) {
-      state.messages[channelTitle] = []
+        state.messages[channelTitle] = []
     }
+    const channel = getChannelByTitle(channelTitle)
+    if (!channel) return
+
+    const mentioned = text
+        .match(/@(\w+)/g)
+        ?.map(mention => mention.slice(1))
+        .filter(nickname => channel.members.includes(nickname))
+
     const newMessage: Message = {
-      id: Date.now(),
-      chatId: channelTitle,
-      senderId: state.currentUser,
-      text,
+        id: Date.now(),
+        chatId: channelTitle,
+        senderId: state.currentUser,
+        text,
+        ...(mentioned && mentioned.length > 0 ? { mentioned } : {}),
     }
     state.messages[channelTitle].push(newMessage)
   }
-
   function initialize() {
     if (state.channels.length > 0) return
 

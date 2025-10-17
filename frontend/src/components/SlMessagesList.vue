@@ -1,6 +1,8 @@
 <template>
   <div class="messages-container">
-    <div v-for="msg in messages" :key="msg.id" class="q-mb-sm message-text" :class="{ 'own-message': msg.senderId === currentUser }">
+    <div v-for="msg in messages" :key="msg.id" class="q-mb-sm message-text" :class="{ 'own-message': msg.senderId === currentUser,
+      'mentioned-message': msg.mentioned?.includes(currentUser),
+     }">
       <span class="sender"><strong>{{ msg.senderId === currentUser ? 'You' : msg.senderId }}:</strong></span>
       <span class="message-content">{{ msg.text }}</span>
     </div>
@@ -50,7 +52,10 @@ defineProps<{
   margin-left: 20%;
   margin-right: 10px;
 }
-
+.mentioned-message {
+  background: rgba(255, 215, 0, 0.3);
+  border: 2px solid #ffd700; 
+}
 .sender {
   margin-right: 8px;
   white-space: nowrap;
