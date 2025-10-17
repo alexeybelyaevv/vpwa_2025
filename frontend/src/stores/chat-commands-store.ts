@@ -83,6 +83,58 @@ export const useChatStore = defineStore('chat', () => {
     })
     console.log(getChannelByTitle(state.currentChannel)?.members)
   }
+  function kick(nickName: string) {
+    if (!state.currentChannel) return
+    const channelTitle = state.currentChannel
+    const channel = getChannelByTitle(channelTitle)
+    if (!channel || nickName === state.currentUser || !channel.members.includes(nickName)) return
+
+    const isAdmin = channel.admin === state.currentUser
+    if (channel.type === 'private' && isAdmin) {
+        channel.members = channel.members.filter(m => m !== nickName)
+        channel.banned.push(nickName)
+        if (!state.messages[channelTitle]) state.messages[channelTitle] = []
+            state.messages[channelTitle].push({
+            id: Date.now(),
+            chatId: channelTitle,
+            senderId: state.currentUser,
+            text: `${nickName} was banned from ${channelTitle}`,
+            })
+    } else if (channel.type === 'public') {
+        if (!channel.kicks[nickName]) {
+            channel.kicks[nickName] = new Set<string>()
+        }
+        if (channel.kicks[nickName].has(state.currentUser)) {
+            if (!state.messages[channelTitle]) state.messages[channelTitle] = []
+            state.messages[channelTitle].push({
+                id: Date.now(),
+                chatId: channelTitle,
+                senderId: state.currentUser,
+                text: `${state.currentUser}, you have already voted to kick ${nickName}`,
+            })
+            return
+        }
+        channel.kicks[nickName].add(state.currentUser)
+        if (!state.messages[channelTitle]) state.messages[channelTitle] = []
+        state.messages[channelTitle].push({
+        id: Date.now(),
+        chatId: channelTitle,
+        senderId: state.currentUser,
+        text: `${state.currentUser} voted to kick ${nickName} (${channel.kicks[nickName].size}/3)`,
+        })
+        if (isAdmin || channel.kicks[nickName].size >= 3) {
+            channel.members = channel.members.filter(m => m !== nickName)
+            channel.banned.push(nickName)
+            if (!state.messages[channelTitle]) state.messages[channelTitle] = []
+            state.messages[channelTitle].push({
+                id: Date.now(),
+                chatId: channelTitle,
+                senderId: state.currentUser,
+                text: `${nickName} was banned from ${channelTitle}`,
+            })
+        }
+    }
+  }
   function quit() {
     if (!state.currentChannel) return
     const channel = getChannelByTitle(state.currentChannel)
@@ -124,6 +176,10 @@ export const useChatStore = defineStore('chat', () => {
         if(arg)
             revoke(arg)
         break
+      case 'kick':
+        if(arg)
+            kick(arg)
+        break        
       case 'quit':
         quit()
         break
@@ -221,5 +277,6 @@ export const useChatStore = defineStore('chat', () => {
     getAvailableCommands,
     invite,
     revoke,
+    kick,
   }
 })
