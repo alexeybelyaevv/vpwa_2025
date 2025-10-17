@@ -48,10 +48,15 @@ export const useChatStore = defineStore('chat', () => {
     if (!state.currentChannel) return
     const channelTitle = state.currentChannel
     const channel = getChannelByTitle(channelTitle)
-    if (!channel || channel.banned.includes(nickName) || channel.members.includes(nickName)) return
+    if (!channel || channel.members.includes(nickName)) return
 
     const isAdmin = channel.admin === state.currentUser
     if (channel.type === 'private' && !isAdmin) return
+    
+    if (channel.banned.includes(nickName)) {
+        if (!isAdmin) return
+        channel.banned = channel.banned.filter(b => b !== nickName)
+    }
     channel.members.push(nickName)
     if (!state.messages[channelTitle]) state.messages[channelTitle] = []
     state.messages[channelTitle].push({
@@ -59,6 +64,22 @@ export const useChatStore = defineStore('chat', () => {
         chatId: channelTitle,
         senderId: state.currentUser,
         text: `${nickName} was invited to ${channelTitle}`,
+    })
+    console.log(getChannelByTitle(state.currentChannel)?.members)
+  }
+  function revoke(nickName: string) {
+    if (!state.currentChannel) return
+    const channelTitle = state.currentChannel
+    const channel = getChannelByTitle(channelTitle)
+    if (!channel || channel.admin !== state.currentUser || channel.type !== 'private') return
+    channel.members = channel.members.filter(m => m !== nickName)
+    channel.banned.push(nickName)
+    if (!state.messages[channelTitle]) state.messages[channelTitle] = []
+    state.messages[channelTitle].push({
+      id: Date.now(),
+      chatId: state.currentChannel,
+      senderId: state.currentUser,
+      text: `${nickName} was revoked from ${state.currentChannel}`,
     })
     console.log(getChannelByTitle(state.currentChannel)?.members)
   }
@@ -98,6 +119,10 @@ export const useChatStore = defineStore('chat', () => {
       case 'invite':
         if(arg)
             invite(arg)
+        break
+      case 'revoke':
+        if(arg)
+            revoke(arg)
         break
       case 'quit':
         quit()
@@ -195,5 +220,6 @@ export const useChatStore = defineStore('chat', () => {
     initialize,
     getAvailableCommands,
     invite,
+    revoke,
   }
 })
