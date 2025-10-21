@@ -2,7 +2,7 @@
     <div class="sl-list">
         <h3>{{ title }}</h3>
         <ul>
-            <li v-for="item in list" :key="item.id">
+            <li v-for="item in list" :key="item.title">
                 {{ item.title }}
             </li>
         </ul>
