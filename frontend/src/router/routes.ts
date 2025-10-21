@@ -9,7 +9,18 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/workspace',
     component: () => import('layouts/WorkspaceLayout.vue'),
-    children: [{ path: '', component: () => import('pages/WorkspacePage.vue') }],
+    children: [
+      {
+        path: '',
+        name: 'workspace',
+        component: () => import('pages/WorkspacePage.vue'),
+      },
+      {
+        path: ':chatSlug',
+        name: 'workspace-chat',
+        component: () => import('pages/WorkspacePage.vue'),
+      },
+    ],
   },
   {
     path: '/login',
