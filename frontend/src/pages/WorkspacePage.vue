@@ -1,5 +1,5 @@
 <template>
-  <div class="sl-workspace">
+  <q-page class="sl-workspace">
     <WorkspaceHeader
       :workspace="activeWorkspace"
       :user="currentUser"
@@ -25,10 +25,11 @@
           dense
           icon="close"
           color="white"
-          aria-label="Close drawer"
+          aria-label="Close navigation"
           @click="mobileDrawer = false"
         />
       </div>
+
       <q-btn
         flat
         dense
@@ -39,6 +40,7 @@
         aria-label="Create channel"
         size="sm"
       />
+
       <q-input
         v-model="navFilter"
         dense
@@ -53,6 +55,7 @@
           <q-icon name="search" size="18px" class="text-grey-4" />
         </template>
       </q-input>
+
       <div class="sl-drawer__lists">
         <q-expansion-item
           dense
@@ -131,24 +134,37 @@
     </q-drawer>
 
     <div class="sl-main">
-      <section class="sl-navigation" aria-label="Workspace navigation">
-        <header class="sl-navigation__header">
-          <div class="sl-navigation__title">
-            <span class="sl-navigation__title-label">Workspace navigation</span>
-            <span class="sl-navigation__title-sub"
-              >{{ filteredChannels.length + filteredDirectChats.length }} items</span
-            >
-          </div>
-        </header>
+      <WorkspaceSidebar
+        class="sl-sidebar"
+        :workspaces="workspaces"
+        :active-workspace-id="activeWorkspaceId"
+        @select="handleWorkspaceSelect"
+      />
+
+      <section class="sl-navigation" aria-label="Channel navigation">
+        <div class="sl-navigation__header">
+          <div class="sl-navigation__title">Navigation</div>
+          <q-btn
+            flat
+            dense
+            color="white"
+            icon="add"
+            label="New channel"
+            class="sl-navigation__action"
+            aria-label="Create channel"
+            size="sm"
+          />
+        </div>
+
         <q-input
           v-model="navFilter"
           dense
-          outlined
+          standout
           rounded
           bg-color="grey-9"
           input-class="text-white"
-          placeholder="Search across channels"
           class="sl-navigation__search"
+          placeholder="Search channels or people"
         >
           <template #prepend>
             <q-icon name="search" size="18px" class="text-grey-4" />
@@ -156,101 +172,58 @@
         </q-input>
 
         <div class="sl-navigation__lists">
-          <q-expansion-item
-            dense
-            expand-icon="keyboard_arrow_down"
-            switch-toggle-side
-            class="sl-navigation__accordion"
-            :model-value="desktopNavSection === 'channels'"
-            @update:model-value="(value) => setDesktopSection('channels', value)"
-          >
-            <template #header>
-              <div class="sl-navigation__accordion-header">
-                <div class="sl-navigation__heading">
-                  <q-icon name="tag" size="18px" />
-                  <span>Channels</span>
-                </div>
-                <q-btn
-                  flat
-                  dense
-                  color="white"
-                  icon="add"
-                  class="sl-navigation__header-action"
-                  aria-label="Create channel"
-                  size="sm"
-                  @click.stop
-                />
-              </div>
-            </template>
-
-            <ConversationList
-              hide-header
-              title="Channels"
-              :list="filteredChannels"
-              accent="hash"
-              :active-id="activeChannelId"
-              @select="navigateToChannel"
-            />
-          </q-expansion-item>
-
-          <q-expansion-item
-            dense
-            expand-icon="keyboard_arrow_down"
-            switch-toggle-side
-            class="sl-navigation__accordion"
-            :model-value="desktopNavSection === 'direct'"
-            @update:model-value="(value) => setDesktopSection('direct', value)"
-          >
-            <template #header>
-              <div class="sl-navigation__accordion-header">
-                <div class="sl-navigation__heading">
-                  <q-icon name="forum" size="18px" />
-                  <span>Direct messages</span>
-                </div>
-                <q-btn
-                  flat
-                  dense
-                  color="white"
-                  icon="person_add_alt"
-                  class="sl-navigation__header-action"
-                  aria-label="Start direct message"
-                  size="sm"
-                  @click.stop
-                />
-              </div>
-            </template>
-
-            <ConversationList
-              hide-header
-              title="Direct messages"
-              :list="filteredDirectChats"
-              accent="status"
-              :active-id="activeDirectId"
-              @select="navigateToDirect"
-            />
-          </q-expansion-item>
+          <ConversationList
+            title="Channels"
+            :list="filteredChannels"
+            accent="hash"
+            :active-id="activeChannelId"
+            @select="navigateToChannel"
+          />
+          <ConversationList
+            title="Direct messages"
+            :list="filteredDirectChats"
+            accent="status"
+            :active-id="activeDirectId"
+            @select="navigateToDirect"
+          />
         </div>
       </section>
 
-      <section class="sl-content" aria-label="Channel content area">
+      <section class="sl-conversation" aria-live="polite">
+        <q-btn
+          v-if="isMobile && hasActiveConversation"
+          flat
+          round
+          dense
+          icon="menu"
+          color="white"
+          class="sl-conversation__drawer-btn"
+          aria-label="Open navigation"
+          @click="mobileDrawer = true"
+        />
+
+        <SlChat v-if="hasActiveConversation" />
         <ConversationShell
-          :channel-name="chatTitle"
-          :channel-description="chatDescription"
+          v-else
           :show-drawer-toggle="isMobile"
+          :channel-name="placeholderChannelName"
+          :channel-description="placeholderChannelDescription"
           @toggle-drawer="mobileDrawer = true"
         />
       </section>
     </div>
-  </div>
+  </q-page>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { useQuasar } from 'quasar';
+import { computed, onMounted, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import WorkspaceHeader from 'src/components/WorkspaceHeader.vue';
+import { useQuasar } from 'quasar';
 import ConversationList from 'src/components/ConversationList.vue';
 import ConversationShell from 'src/components/ConversationShell.vue';
+import SlChat from 'src/components/SlChat.vue';
+import WorkspaceHeader from 'src/components/WorkspaceHeader.vue';
+import WorkspaceSidebar from 'src/components/WorkspaceSidebar.vue';
 import type {
   Chat,
   PresenceStatus,
@@ -258,394 +231,234 @@ import type {
   WorkspaceBadge,
   WorkspaceSummary,
 } from 'src/types';
-
-const workspaces = reactive<(WorkspaceBadge & { plan: string })[]>([
-  { id: 1, name: 'Team Nova', initials: 'TN', color: '#5865f2', plan: 'Pro Workspace' },
-  { id: 2, name: 'Marketing Hub', initials: 'MH', color: '#4dc0b5', plan: 'Starter Plan' },
-  { id: 3, name: 'Ops Center', initials: 'OC', color: '#f2994a', plan: 'Enterprise' },
-  { id: 4, name: 'QA Studio', initials: 'QA', color: '#9b51e0', plan: 'Sandbox' },
-]);
-
-const activeWorkspaceId = ref(workspaces[0]?.id ?? 0);
-
-const activeWorkspace = computed<WorkspaceSummary>(() => {
-  const match = workspaces.find((item) => item.id === activeWorkspaceId.value);
-  if (!match) {
-    return { id: 0, name: 'Workspace', plan: '' };
-  }
-  return { id: match.id, name: match.name, plan: match.plan };
-});
-
-const currentUser = reactive<UserProfile>({
-  name: 'Oleksii Belyaev',
-  role: 'Frontend Engineer',
-  status: 'online',
-  avatarUrl:
-    'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=160&q=80',
-});
-
-const channels = ref<Chat[]>([
-  {
-    id: 1,
-    title: 'general',
-    slug: 'general',
-    description: 'Updates, wins, and company-wide announcements',
-    unread: 4,
-    type: 'channel',
-  },
-  {
-    id: 2,
-    title: 'product-sync',
-    slug: 'product-sync',
-    description: 'Roadmap alignment and sprint planning',
-    unread: 2,
-    type: 'channel',
-  },
-  {
-    id: 3,
-    title: 'design-review',
-    slug: 'design-review',
-    description: 'Share mockups for feedback before Thursday',
-    type: 'channel',
-  },
-  {
-    id: 4,
-    title: 'release-support',
-    slug: 'release-support',
-    description: 'On-call status and deploy coordination',
-    invited: true,
-    muted: true,
-    type: 'channel',
-  },
-]);
-
-const directChats = ref<Chat[]>([
-  {
-    id: 21,
-    title: 'John Carter',
-    status: 'online',
-    description: 'Shared sprint notes',
-    type: 'dm',
-  },
-  {
-    id: 22,
-    title: 'Ava Thompson',
-    status: 'away',
-    description: 'Feature flag follow-up',
-    type: 'dm',
-  },
-  {
-    id: 23,
-    title: 'Emilia Rhodes',
-    status: 'offline',
-    description: 'Design system review',
-    type: 'dm',
-  },
-  {
-    id: 24,
-    title: 'Noah Bennett',
-    status: 'dnd',
-    description: 'Release checklist',
-    type: 'dm',
-  },
-]);
-
-const navFilter = ref('');
-const desktopNavSection = ref<'channels' | 'direct'>('channels');
-const mobileNavSection = ref<'channels' | 'direct'>('channels');
+import { useChatStore } from 'src/stores/chat-commands-store';
 
 const $q = useQuasar();
-const isMobile = computed(() => $q.screen.lt.md);
-const mobileDrawer = ref(false);
 const router = useRouter();
 const route = useRoute();
+const chatCommandsStore = useChatStore();
 
-const filterText = computed(() => navFilter.value.trim().toLowerCase());
+const navFilter = ref('');
+const mobileDrawer = ref(false);
+const mobileNavSection = ref<'channels' | 'direct'>('channels');
 
-const filteredChannels = computed(() => {
-  const pool = channels.value.filter((item) => {
-    if (!filterText.value) return true;
-    return (
-      item.title.toLowerCase().includes(filterText.value) ||
-      (item.description?.toLowerCase().includes(filterText.value) ?? false)
-    );
-  });
+const workspaces = ref<Array<WorkspaceBadge & { plan?: string }>>([
+  { id: 1, name: 'Voyager Platform', initials: 'VP', color: '#7c3aed', plan: 'Pro' },
+  { id: 2, name: 'Launch Control', initials: 'LC', color: '#f59e0b', plan: 'Plus' },
+  { id: 3, name: 'Telemetry Lab', initials: 'TL', color: '#10b981', plan: 'Starter' },
+]);
 
-  return [...pool].sort((a, b) => {
-    const inviteWeight = Number(Boolean(b.invited)) - Number(Boolean(a.invited));
-    if (inviteWeight !== 0) return inviteWeight;
-    return (a.title ?? '').localeCompare(b.title ?? '');
-  });
+const activeWorkspaceId = ref<number | null>(workspaces.value[0]?.id ?? null);
+
+const activeWorkspace = computed<WorkspaceSummary>(() => {
+  const fallback = workspaces.value[0];
+  const selected =
+    workspaces.value.find((workspace) => workspace.id === activeWorkspaceId.value) ?? fallback;
+
+  if (!selected) {
+    return {
+      id: 0,
+      name: 'Workspace',
+      plan: 'Starter',
+    };
+  }
+
+  return {
+    id: selected.id,
+    name: selected.name,
+    plan: selected.plan ?? 'Starter',
+  };
 });
 
-const filteredDirectChats = computed(() => {
-  if (!filterText.value) return directChats.value;
-  return directChats.value.filter(
-    (item) =>
-      item.title.toLowerCase().includes(filterText.value) ||
-      (item.description?.toLowerCase().includes(filterText.value) ?? false),
-  );
+const currentUser = ref<UserProfile>({
+  name: chatCommandsStore.state.currentUser,
+  role: 'Engineer',
+  status: 'online',
 });
 
-function sectionHasItems(section: 'channels' | 'direct') {
-  return section === 'channels'
-    ? filteredChannels.value.length > 0
-    : filteredDirectChats.value.length > 0;
-}
+const channels = computed<Chat[]>(() =>
+  chatCommandsStore.state.channels.filter((chat: Chat) => chat.type === 'public'),
+);
 
-function setDesktopSection(section: 'channels' | 'direct', opened: boolean) {
-  if (opened) {
-    desktopNavSection.value = section;
-    return;
+const directChats = computed<Chat[]>(() =>
+  chatCommandsStore.state.channels.filter((chat: Chat) => chat.type === 'private'),
+);
+
+const filteredChannels = computed<Chat[]>(() => applyFilter(channels.value));
+const filteredDirectChats = computed<Chat[]>(() => applyFilter(directChats.value));
+
+const allConversations = computed<Chat[]>(() => [...channels.value, ...directChats.value]);
+
+const activeConversation = computed<Chat | null>(() => {
+  const current = chatCommandsStore.state.currentChannel;
+  if (!current) {
+    return null;
   }
-
-  if (desktopNavSection.value !== section) {
-    return;
-  }
-
-  const fallback = section === 'channels' ? 'direct' : 'channels';
-  if (sectionHasItems(fallback)) {
-    desktopNavSection.value = fallback;
-  } else {
-    void nextTick(() => {
-      desktopNavSection.value = section;
-    });
-  }
-}
-
-function setMobileSection(section: 'channels' | 'direct', opened: boolean) {
-  if (opened) {
-    mobileNavSection.value = section;
-    return;
-  }
-
-  if (mobileNavSection.value !== section) {
-    return;
-  }
-
-  const fallback = section === 'channels' ? 'direct' : 'channels';
-  if (sectionHasItems(fallback)) {
-    mobileNavSection.value = fallback;
-  } else {
-    void nextTick(() => {
-      mobileNavSection.value = section;
-    });
-  }
-}
-
-function ensureSectionState() {
-  const available: Array<'channels' | 'direct'> = [];
-  if (sectionHasItems('channels')) available.push('channels');
-  if (sectionHasItems('direct')) available.push('direct');
-
-  const fallback = available[0] ?? 'channels';
-
-  if (!available.includes(desktopNavSection.value)) {
-    desktopNavSection.value = fallback;
-  }
-  if (!available.includes(mobileNavSection.value)) {
-    mobileNavSection.value = fallback;
-  }
-}
-
-watch([filteredChannels, filteredDirectChats], () => {
-  ensureSectionState();
+  return allConversations.value.find((chat) => chat.title === current) ?? null;
 });
 
-ensureSectionState();
-
-function updateUserStatus(status: PresenceStatus) {
-  currentUser.status = status;
-}
-
-function handleLogout() {
-  console.log('Logout requested');
-}
-
-const entityType = computed(() => {
-  const type = (route.params.entityType as string | undefined)?.toLowerCase();
-  if (type === 'dm' || type === 'channel') {
-    return type;
-  }
-  return 'channel';
-});
-
-const entityId = computed(() => (route.params.entityId as string | undefined) ?? null);
-
-const activeChannel = computed<Chat | null>(() => {
-  if (entityType.value !== 'channel') return null;
-  const id = entityId.value;
-  if (!id) return channels.value[0] ?? null;
-  return (
-    channels.value.find((item) => (item.slug ?? String(item.id)) === id) ??
-    channels.value[0] ??
-    null
-  );
-});
-
-const activeDirect = computed<Chat | null>(() => {
-  if (entityType.value !== 'dm') return null;
-  const id = entityId.value;
-  if (!id) return directChats.value[0] ?? null;
-  return directChats.value.find((item) => String(item.id) === id) ?? directChats.value[0] ?? null;
-});
+const hasActiveConversation = computed<boolean>(() => activeConversation.value !== null);
 
 const activeChannelId = computed<string | undefined>(() => {
-  if (entityType.value !== 'channel' || !activeChannel.value) {
+  const current = chatCommandsStore.state.currentChannel;
+  if (!current) {
     return undefined;
   }
-  return activeChannel.value.slug ?? String(activeChannel.value.id);
+  return channels.value.find((chat) => chat.title === current)?.slug;
 });
 
 const activeDirectId = computed<string | undefined>(() => {
-  if (entityType.value !== 'dm' || !activeDirect.value) {
+  const current = chatCommandsStore.state.currentChannel;
+  if (!current) {
     return undefined;
   }
-  return String(activeDirect.value.id);
+  return directChats.value.find((chat) => chat.title === current)?.slug;
 });
 
-const chatTitle = computed(() => {
-  if (activeChannel.value) {
-    return `# ${activeChannel.value.title}`;
+const placeholderChannelName = computed<string>(() => {
+  if (activeConversation.value) {
+    return `# ${activeConversation.value.title}`;
   }
-
-  if (entityType.value === 'dm' && activeDirect.value) {
-    return `@ ${activeDirect.value.title}`;
-  }
-
-  return '# Welcome';
+  const fallback = allConversations.value[0];
+  return fallback ? `# ${fallback.title}` : '# welcome';
 });
 
-const chatDescription = computed(() => {
-  if (activeChannel.value?.description) {
-    return activeChannel.value.description;
+const placeholderChannelDescription = computed<string>(() => {
+  if (activeConversation.value?.description) {
+    return activeConversation.value.description;
   }
-
-  if (activeDirect.value?.description) {
-    return activeDirect.value.description;
-  }
-
-  return 'Select a conversation to see the messages.';
+  const fallback = allConversations.value.find((chat) => chat.description);
+  return (
+    fallback?.description ??
+    'Pick a channel from the list to start chatting while the realtime bridge is on the way.'
+  );
 });
 
-function navigateToChannel(item: Chat) {
-  const slug = item.slug ?? String(item.id);
-  if (entityType.value === 'channel' && entityId.value === slug) {
-    mobileDrawer.value = false;
-    return;
-  }
-
-  void router.push({
-    name: 'workspace-entity',
-    params: { entityType: 'channel', entityId: slug },
-  });
-
-  if (isMobile.value) {
-    mobileDrawer.value = false;
-  }
-}
-
-function navigateToDirect(item: Chat) {
-  const id = String(item.id);
-  if (entityType.value === 'dm' && entityId.value === id) {
-    mobileDrawer.value = false;
-    return;
-  }
-
-  void router.push({
-    name: 'workspace-entity',
-    params: { entityType: 'dm', entityId: id },
-  });
-
-  if (isMobile.value) {
-    mobileDrawer.value = false;
-  }
-}
-
-function ensureValidRoute() {
-  if (!channels.value.length) return;
-
-  const currentType = (route.params.entityType as string | undefined)?.toLowerCase();
-  const currentId = route.params.entityId as string | undefined;
-
-  const goToFirstChannel = () => {
-    const fallback = channels.value[0];
-    if (!fallback) {
-      return;
-    }
-    void router.replace({
-      name: 'workspace-entity',
-      params: { entityType: 'channel', entityId: fallback.slug ?? String(fallback.id) },
-    });
-  };
-
-  if (!currentType) {
-    goToFirstChannel();
-    return;
-  }
-
-  if (currentType === 'channel') {
-    const match = channels.value.find((item) => (item.slug ?? String(item.id)) === currentId);
-    if (!match) {
-      goToFirstChannel();
-    }
-    return;
-  }
-
-  if (currentType === 'dm') {
-    if (!directChats.value.length) {
-      goToFirstChannel();
-      return;
-    }
-
-    const match = directChats.value.find((item) => String(item.id) === currentId);
-    if (!match) {
-      const fallbackDm = directChats.value[0];
-      if (!fallbackDm) {
-        goToFirstChannel();
-        return;
-      }
-      void router.replace({
-        name: 'workspace-entity',
-        params: { entityType: 'dm', entityId: String(fallbackDm.id) },
-      });
-    }
-    return;
-  }
-
-  goToFirstChannel();
-}
+const isMobile = computed<boolean>(() => $q.screen.lt.md);
 
 onMounted(() => {
-  ensureValidRoute();
+  chatCommandsStore.initialize();
 });
-
-watch(
-  () => [
-    route.params.entityType,
-    route.params.entityId,
-    channels.value.length,
-    directChats.value.length,
-  ],
-  () => {
-    ensureValidRoute();
-  },
-);
 
 watch(isMobile, (value) => {
   if (!value) {
     mobileDrawer.value = false;
   }
 });
+
+watchEffect(() => {
+  if (!allConversations.value.length) {
+    return;
+  }
+
+  const entityType = route.params.entityType as string | undefined;
+  const entityId = route.params.entityId as string | undefined;
+
+  if (entityType && entityId) {
+    const target = findConversation(entityType, entityId);
+    if (target && chatCommandsStore.state.currentChannel !== target.title) {
+      chatCommandsStore.state.currentChannel = target.title;
+    }
+    return;
+  }
+
+  if (!chatCommandsStore.state.currentChannel) {
+    chatCommandsStore.state.currentChannel = allConversations.value[0]!.title;
+  }
+});
+
+watch(
+  () => chatCommandsStore.state.currentChannel,
+  (next) => {
+    if (!next) {
+      if (route.name !== 'workspace-root') {
+        void router.replace({ name: 'workspace-root' }).catch(() => {});
+      }
+      return;
+    }
+
+    const target = allConversations.value.find((chat) => chat.title === next);
+    if (!target) {
+      return;
+    }
+
+    const entityType = target.type === 'private' ? 'direct' : 'channel';
+    const entityId = target.slug || String(target.id);
+
+    if (
+      route.name === 'workspace-entity' &&
+      route.params.entityType === entityType &&
+      route.params.entityId === entityId
+    ) {
+      return;
+    }
+
+    void router
+      .replace({ name: 'workspace-entity', params: { entityType, entityId } })
+      .catch(() => {});
+  },
+);
+
+function applyFilter(list: Chat[]): Chat[] {
+  const query = navFilter.value.trim().toLowerCase();
+  if (!query) {
+    return list;
+  }
+  return list.filter((item) => {
+    const titleMatch = item.title.toLowerCase().includes(query);
+    const descriptionMatch = item.description?.toLowerCase().includes(query) ?? false;
+    return titleMatch || descriptionMatch;
+  });
+}
+
+function setMobileSection(section: 'channels' | 'direct', value: boolean) {
+  if (value) {
+    mobileNavSection.value = section;
+  }
+}
+
+function navigateToChannel(chat: Chat) {
+  chatCommandsStore.state.currentChannel = chat.title;
+  mobileDrawer.value = false;
+}
+
+function navigateToDirect(chat: Chat) {
+  chatCommandsStore.state.currentChannel = chat.title;
+  mobileDrawer.value = false;
+}
+
+function updateUserStatus(status: PresenceStatus) {
+  currentUser.value = {
+    ...currentUser.value,
+    status,
+  };
+}
+
+function handleLogout() {
+  void router.push({ path: '/login' });
+}
+
+function handleWorkspaceSelect(id: number) {
+  activeWorkspaceId.value = id;
+}
+
+function findConversation(entityType: string, entityId: string): Chat | undefined {
+  const source = entityType === 'direct' ? directChats.value : channels.value;
+  const targetId = entityId.toLowerCase();
+  return source.find((chat) => {
+    const slugMatch = chat.slug?.toLowerCase() === targetId;
+    const titleMatch = chat.title.toLowerCase() === targetId;
+    const idMatch = String(chat.id ?? '').toLowerCase() === targetId;
+    return slugMatch || titleMatch || idMatch;
+  });
+}
 </script>
 
 <style scoped lang="scss">
 .sl-workspace {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100%;
   background: radial-gradient(circle at top left, #3f0f40 0%, #1a1d21 60%, #16181d 100%);
   color: #f5f6f8;
   font-family:
@@ -659,57 +472,42 @@ watch(isMobile, (value) => {
 .sl-main {
   flex: 1;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 96px 320px minmax(0, 1fr);
   gap: 24px;
   padding: 28px 32px 44px;
   align-items: stretch;
   min-height: 0;
-  height: 100%;
-  overflow: hidden;
   box-sizing: border-box;
+}
+
+.sl-sidebar {
+  min-height: 0;
 }
 
 .sl-navigation {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  background: linear-gradient(180deg, rgba(22, 24, 31, 0.92), rgba(16, 18, 24, 0.96));
-  border-radius: 26px;
-  padding: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(22px);
-  min-width: 0;
-  height: 100%;
+  border-radius: 24px;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(26, 30, 39, 0.92), rgba(18, 20, 27, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 18px 38px rgba(5, 7, 14, 0.42);
   min-height: 0;
-  overflow: hidden;
-  box-shadow: 0 28px 60px rgba(6, 8, 14, 0.4);
-  box-sizing: border-box;
 }
 
 .sl-navigation__header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  align-items: flex-end;
 }
 
 .sl-navigation__title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sl-navigation__title-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.sl-navigation__title-sub {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .sl-navigation__search {
@@ -717,221 +515,112 @@ watch(isMobile, (value) => {
 }
 
 .sl-navigation__lists {
-  flex: 1 1 0;
-  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  overflow-y: auto;
-  padding-right: 4px;
-
-  :deep(.q-expansion-item__container) {
-    border-radius: 20px;
-    background: rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    overflow: hidden;
-  }
-
-  :deep(.q-expansion-item__content) {
-    padding: 0;
-    background: rgba(14, 16, 22, 0.92);
-  }
-
-  :deep(.q-expansion-item__toggle-icon) {
-    color: rgba(255, 255, 255, 0.6);
-    transition: color 0.2s ease;
-  }
-}
-
-.sl-navigation__accordion {
-  background: transparent;
-  border-radius: 20px;
-}
-
-.sl-navigation__accordion + .sl-navigation__accordion {
-  margin-top: 10px;
-}
-
-.sl-navigation__accordion-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding: 16px 18px;
-  box-sizing: border-box;
-  gap: 12px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
-
-  @media (min-width: 960px) {
-    padding: 18px 22px;
-  }
-}
-
-.sl-navigation__heading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
-}
-
-.sl-navigation__header-action {
-  text-transform: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.1);
-
-  :deep(.q-btn__content) {
-    font-size: 12px;
-    gap: 6px;
-  }
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.16);
-  }
-}
-
-.sl-content {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  height: 100%;
+  overflow: hidden;
   min-height: 0;
 }
+
+.sl-conversation {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sl-conversation__drawer-btn {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 10;
+  backdrop-filter: blur(12px);
+  background: rgba(36, 38, 48, 0.84);
+}
+
 .sl-drawer {
-  background: linear-gradient(180deg, #201f2c 0%, #121319 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(26, 30, 39, 0.96), rgba(18, 20, 27, 0.94));
   color: #f5f6f8;
-  padding: 18px 16px 24px;
 }
 
 .sl-drawer__header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  justify-content: space-between;
 }
 
 .sl-drawer__title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.sl-drawer__create {
+  align-self: flex-start;
+}
+
+.sl-drawer__search {
+  width: 100%;
 }
 
 .sl-drawer__lists {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   overflow-y: auto;
-  padding-right: 4px;
-
-  :deep(.q-expansion-item__container) {
-    border-radius: 18px;
-    background: rgba(0, 0, 0, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-  }
-
-  :deep(.q-expansion-item__content) {
-    padding: 0;
-    background: rgba(16, 18, 25, 0.95);
-  }
 }
 
-.sl-drawer__create {
-  margin-bottom: 12px;
-  align-self: flex-start;
+.sl-navigation__accordion {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f6f8;
+}
+
+.sl-navigation__accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sl-navigation__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
   text-transform: none;
-  border-radius: 12px;
-  padding: 0 12px;
-  background: rgba(255, 255, 255, 0.1);
-
-  :deep(.q-btn__content) {
-    gap: 6px;
-    font-weight: 600;
-    font-size: 12px;
-  }
 }
 
-.sl-drawer__search {
-  margin-bottom: 14px;
+.sl-navigation__header-action {
+  color: rgba(255, 255, 255, 0.82);
 }
 
-.sl-drawer__lists::-webkit-scrollbar {
-  width: 4px;
-}
-
-.sl-drawer__lists::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-}
-
-@media (max-width: 1440px) {
+@media (max-width: 1280px) {
   .sl-main {
-    grid-template-columns: 280px minmax(0, 1fr);
-    padding: 28px;
+    grid-template-columns: 88px 280px minmax(0, 1fr);
     gap: 20px;
+    padding: 24px 24px 36px;
   }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 960px) {
   .sl-main {
-    display: flex;
-    flex-direction: column;
-    padding: 24px 22px 36px;
-    gap: 18px;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 20px 16px 28px;
+    gap: 16px;
   }
 
+  .sl-sidebar,
   .sl-navigation {
-    padding: 20px;
+    display: none;
   }
 
-  .sl-navigation__header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .sl-navigation__lists {
-    flex-direction: row;
-    gap: 12px;
-    overflow-x: hidden;
-    overflow-y: visible;
-    padding-right: 0;
-
-    :deep(.q-expansion-item__container) {
-      background: rgba(0, 0, 0, 0.08);
-    }
-  }
-
-  .sl-navigation__lists :deep(.sl-list) {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-}
-
-@media (max-width: 720px) {
-  .sl-main {
-    padding: 18px 16px 30px;
-    gap: 14px;
-  }
-
-  .sl-navigation {
-    padding: 16px;
-    border-radius: 20px;
-  }
-
-  .sl-navigation__lists {
-    flex-direction: column;
-    gap: 12px;
-    padding-right: 0;
-  }
-}
-
-.sl-navigation__search :deep(.q-field__control) {
-  @media (max-width: 600px) {
-    min-height: 40px;
+  .sl-conversation {
+    min-height: calc(100vh - 220px);
   }
 }
 </style>

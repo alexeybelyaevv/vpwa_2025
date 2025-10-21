@@ -32,5 +32,18 @@ export interface Chat {
   icon?: string;
   invited?: boolean;
   lastActiveAt?: string;
-  type?: 'channel' | 'dm';
+  type: ChannelType;
+  admin: string;
+  members: string[];
+  banned: string[];
+  kicks: Record<string, Set<string>>;
+}
+export type ChannelType = 'public' | 'private';
+
+export interface Message {
+  id: number;
+  chatId: string;
+  senderId: string;
+  text: string;
+  mentioned?: string[];
 }
