@@ -55,8 +55,8 @@ import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import SlMessagesList from './SlMessagesList.vue'
 import SlChatHeader from './SlChatHeader.vue'
 import { useChatStore } from 'src/stores/chat-commands-store'
-import { QInput } from 'quasar'
-
+import { QInput, QScrollArea } from 'quasar'
+import type { Ref } from 'vue'
 const chatCommandsStore = useChatStore()
 
 onMounted(() => {
@@ -64,9 +64,9 @@ onMounted(() => {
 })
 
 const message = ref('')
-const scrollArea = ref()
+const scrollArea = ref<QScrollArea | null>(null)
 const showMenu = ref(false)
-const inputRef = ref<QInput | null>(null)
+const inputRef: Ref<QInput | null> = ref(null)
 const highlightedIndex = ref(-1)
 
 const inputElement = computed(() => {
@@ -79,13 +79,11 @@ const currentMessages = computed(() => {
     : []
 })
 
-const chatTitle = computed(() => {
-  if (chatCommandsStore.state.currentChannel === null) {
-    return 'No Channel Selected'
-  }
-  const channel = chatCommandsStore.getChannelByTitle(chatCommandsStore.state.currentChannel)
-  return channel ? channel.title : 'No Channel Selected'
-})
+const chatTitle = computed(() =>
+  chatCommandsStore.state.currentChannel
+    ? chatCommandsStore.getChannelByTitle(chatCommandsStore.state.currentChannel)?.title || 'No Channel Selected'
+    : 'No Channel Selected'
+)
 
 const availableCommands = computed(() => {
   return chatCommandsStore.getAvailableCommands()
@@ -122,19 +120,22 @@ async function sendMessage() {
 function handleKeydown(event: KeyboardEvent) {
   if (!showMenu.value) return
 
+  const commands = availableCommands.value
+  if (!commands.length) return
+
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+  event.preventDefault()
+
   if (event.key === 'ArrowDown') {
-    event.preventDefault()
-    highlightedIndex.value = (highlightedIndex.value + 1) % availableCommands.value.length
-    if (highlightedIndex.value >= 0 && highlightedIndex.value < availableCommands.value.length) {
-      message.value = availableCommands.value[highlightedIndex.value]!
-    }
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault()
-    highlightedIndex.value = (highlightedIndex.value - 1 + availableCommands.value.length) % availableCommands.value.length
-    if (highlightedIndex.value >= 0 && highlightedIndex.value < availableCommands.value.length) {
-      message.value = availableCommands.value[highlightedIndex.value]!
-    }
-  } 
+    highlightedIndex.value = (highlightedIndex.value + 1) % commands.length
+  } else {
+    highlightedIndex.value = (highlightedIndex.value - 1 + commands.length) % commands.length
+  }
+
+  const index = highlightedIndex.value
+  if (index >= 0 && index < commands.length) {
+    message.value = commands[index]!
+  }
 }
 
 watch(showMenu, (newValue) => {
