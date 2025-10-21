@@ -53,9 +53,8 @@ export const useChatStore = defineStore('chat', () => {
     const isAdmin = channel.admin === state.currentUser
     if (channel.type === 'private' && !isAdmin) return
     
-    if (channel.banned.includes(nickName)) {
-        if (!isAdmin) return
-        channel.banned = channel.banned.filter(b => b !== nickName)
+    if (channel.banned.includes(nickName) && isAdmin) {
+      channel.banned = channel.banned.filter(b => b !== nickName)
     }
     channel.members.push(nickName)
     if (!state.messages[channelTitle]) state.messages[channelTitle] = []
