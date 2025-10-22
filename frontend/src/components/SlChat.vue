@@ -32,9 +32,21 @@
             anchor="bottom left"
             self="top left"
             no-focus
+            :style="commandMenuStyle"
+            :content-style="commandMenuContentStyle"
+            content-class="sl-command-menu__surface"
+            dark
           >
-            <q-list style="min-width: 200px">
-              <q-item v-for="(cmd, index) in availableCommands" :key="cmd" clickable @click="selectCommand(cmd)" :class="{ highlighted: index === highlightedIndex }">
+            <q-list :style="commandMenuListStyle">
+              <q-item
+                v-for="(cmd, index) in availableCommands"
+                :key="cmd"
+                clickable
+                @click="selectCommand(cmd)"
+                @mouseenter="hoveredCommandIndex = index"
+                @mouseleave="hoveredCommandIndex = null"
+                :style="getCommandItemStyle(index === highlightedIndex, hoveredCommandIndex === index)"
+              >
                 <q-item-section>{{ cmd }}</q-item-section>
               </q-item>
             </q-list>
@@ -68,6 +80,7 @@ const scrollArea = ref<QScrollArea | null>(null)
 const showMenu = ref(false)
 const inputRef: Ref<QInput | null> = ref(null)
 const highlightedIndex = ref(-1)
+const hoveredCommandIndex = ref<number | null>(null)
 
 const inputElement = computed(() => {
   return inputRef.value?.$el.querySelector('input') || inputRef.value?.$el
@@ -88,6 +101,49 @@ const chatTitle = computed(() =>
 const availableCommands = computed(() => {
   return chatCommandsStore.getAvailableCommands()
 })
+
+const commandMenuStyle = {
+  borderRadius: '16px',
+  overflow: 'hidden',
+}
+
+const commandMenuContentStyle = `
+  background: linear-gradient(135deg, #08090d 0%, #131924 100%) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  box-shadow: 0 26px 54px rgba(5, 8, 15, 0.75) !important;
+  color: #e2e8f0 !important;
+  padding: 8px 0 !important;
+`
+
+const commandMenuListStyle = `
+  min-width: 220px !important;
+  background: transparent !important;
+  padding: 6px 0 !important;
+  color: #e2e8f0 !important;
+`
+
+function getCommandItemStyle(isActive: boolean, isHovered: boolean): string {
+  const base = `
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin: 0 8px 4px;
+    color: #e2e8f0 !important;
+    background: transparent !important;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  `
+
+  if (isActive || isHovered) {
+    return `
+      ${base}
+      background: linear-gradient(120deg, rgba(129, 140, 248, 0.36), rgba(59, 130, 246, 0.28)) !important;
+      color: #ffffff !important;
+      box-shadow: 0 12px 28px rgba(21, 32, 67, 0.45);
+    `
+  }
+
+  return base
+}
 
 function selectCommand(cmd: string) {
   message.value = cmd
@@ -145,6 +201,7 @@ watch(showMenu, (newValue) => {
   } else {
     document.removeEventListener('keydown', handleKeydown)
     highlightedIndex.value = -1
+    hoveredCommandIndex.value = null
   }
 })
 </script>
@@ -189,8 +246,27 @@ watch(showMenu, (newValue) => {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.highlighted {
-  background-color: #4a00e0 !important;
-  color: #ffffff !important;
+:deep(.sl-command-menu__surface) {
+  background: linear-gradient(135deg, #08090d 0%, #131924 100%) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  box-shadow: 0 26px 54px rgba(5, 8, 15, 0.75) !important;
+  color: #e2e8f0 !important;
+  padding: 8px 0 !important;
+}
+
+:deep(.sl-command-menu__surface .q-list) {
+  background: transparent !important;
+  color: #e2e8f0 !important;
+  padding: 6px 0 !important;
+}
+
+:deep(.sl-command-menu__surface .q-item) {
+  border-radius: 10px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+:deep(.sl-command-menu__surface .q-item:hover) {
+  background: rgba(148, 163, 184, 0.14) !important;
 }
 </style>
