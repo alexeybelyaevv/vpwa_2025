@@ -2,11 +2,16 @@ import { defineStore } from 'pinia';
 import { reactive } from 'vue';
 import type { Chat, Message, ChannelType } from 'src/types';
 import { chatTitleToSlug } from 'src/utils/chat';
+import { useQuasar } from 'quasar';
 
 export const useChatStore = defineStore('chat', () => {
+  const MESSAGES_BATCH_SIZE = 20
+  const $q = useQuasar();
   const state = reactive({
     channels: [] as Chat[],
     messages: {} as Record<string, Message[]>,
+    visibleMessages: {} as Record<string, Message[]>,
+    visiblePosition: {} as Record<string, number>,
     currentChannel: null as string | null,
     currentUser: 'Alex' as string,
   });
@@ -14,7 +19,16 @@ export const useChatStore = defineStore('chat', () => {
   function getChannelByTitle(title: string): Chat | undefined {
     return state.channels.find((c) => c.title === title);
   }
+  function initializeVisibleMessages(channelTitle: string) {
+    const all = state.messages[channelTitle] || [];
+    const total = all.length;
 
+    const start = Math.max(0, total - MESSAGES_BATCH_SIZE);
+    const initialVisible = all.slice(start);
+
+    state.visibleMessages[channelTitle] = [...initialVisible];
+    state.visiblePosition[channelTitle] = start;
+  }
   function createChannel(title: string, type: ChannelType) {
     if (getChannelByTitle(title)) {
       return;
@@ -212,8 +226,21 @@ export const useChatStore = defineStore('chat', () => {
       text,
       ...(mentioned && mentioned.length > 0 ? { mentioned } : {}),
     };
-
+          if (newMessage.mentioned?.includes(state.currentUser)) {
+        $q.notify({
+        message: `You were mentioned by ${newMessage.senderId}`,
+        color: 'yellow',
+        position: 'top-right',
+        timeout: 3000,
+      }); }
     state.messages[channelTitle].push(newMessage);
+    if (state.currentChannel === channelTitle) {
+      if (!state.visibleMessages[channelTitle]) {
+        initializeVisibleMessages(channelTitle);
+      } else {
+        state.visibleMessages[channelTitle].push(newMessage);
+      }
+  }
   }
 
   function sendMessage(channelTitle: string, text: string) {
@@ -224,19 +251,19 @@ export const useChatStore = defineStore('chat', () => {
 
     createChannel('general', 'public');
     const generalChannel = getChannelByTitle('general');
+
     if (generalChannel) {
       ensureMember(generalChannel, 'Mira');
       ensureMember(generalChannel, 'Noah');
-      pushMessage(
-        'general',
-        'Mira',
-        'Morning team! The sprint board is up to date if you want to peek before standup.',
-      );
-      pushMessage(
-        'general',
-        'Noah',
-        "Hey @Alex, can you share yesterday's design explorations before we review?",
-      );
+
+      for (let i = 1; i <= 50; i++) {
+        const sender = i % 2 === 0 ? 'Mira' : 'Noah';
+        pushMessage(
+          'general',
+          sender,
+          `(${i}) This is message number ${i} from ${sender}.`
+        );
+      }
     }
 
     createChannel('random', 'public');
@@ -253,7 +280,7 @@ export const useChatStore = defineStore('chat', () => {
       pushMessage(
         'projects',
         'Mira',
-        'Shipped the analytics dashboard update. QA is scheduled for tomorrow morning.',
+        'Shipped the analytics dashboard update. QA is scheduled for tomorrow morning.'
       );
     }
 
@@ -273,9 +300,14 @@ export const useChatStore = defineStore('chat', () => {
 
     if (state.channels.length > 0) {
       const generalChannel = getChannelByTitle('general');
-      state.currentChannel = generalChannel ? generalChannel.title : state.channels[0]?.title || '';
+      state.currentChannel = generalChannel
+        ? generalChannel.title
+        : state.channels[0]?.title || '';
+
+      initializeVisibleMessages(state.currentChannel);
     }
   }
+
   function getAvailableCommands(): string[] {
     const commands = ['/join channelName [private]'];
     if (!state.currentChannel) return commands;
@@ -324,7 +356,32 @@ export const useChatStore = defineStore('chat', () => {
     state.currentChannel = state.channels[0]?.title || '';
     return chatTitleToSlug(state.currentChannel);
   }
+  async function loadOlderMessages(channelTitle: string) {
+    const all = state.messages[channelTitle];
+    const visible = state.visibleMessages[channelTitle];
+    const pos = state.visiblePosition[channelTitle] ?? all?.length ?? 0;
 
+    if (!all || all.length === 0) return;
+    if (!visible) {
+      initializeVisibleMessages(channelTitle);
+      return;
+    }
+
+    if (pos <= 0) return;
+
+    const start = Math.max(0, pos - MESSAGES_BATCH_SIZE);
+    const end = pos;
+    const olderMessages = all.slice(start, end);
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    state.visibleMessages[channelTitle] = [
+      ...olderMessages,
+      ...(state.visibleMessages[channelTitle] ?? []),
+    ];
+
+    state.visiblePosition[channelTitle] = start;
+  }
   return {
     state,
     getChannelByTitle,
@@ -341,5 +398,7 @@ export const useChatStore = defineStore('chat', () => {
     kick,
     selectChannelBySlug,
     chatTitleToSlug,
+    loadOlderMessages,
+    initializeVisibleMessages,
   };
 });

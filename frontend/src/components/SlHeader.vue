@@ -121,7 +121,7 @@ const emit = defineEmits<{
   (e: 'toggle-nav'): void;
 }>();
 
-const userName = 'Jordan Carter';
+const userName = 'Alex Carter';
 const userRole = 'Product Designer';
 
 const statuses = [
