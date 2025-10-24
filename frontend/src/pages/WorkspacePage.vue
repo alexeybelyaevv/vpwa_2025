@@ -14,7 +14,7 @@
         <div class="sl-workspace__drawer-profile">
           <div class="sl-workspace__drawer-avatar">JC</div>
           <div>
-            <div class="sl-workspace__drawer-name">Jordan Carter</div>
+            <div class="sl-workspace__drawer-name">Alex Carter</div>
             <div class="sl-workspace__drawer-role">Product Designer</div>
           </div>
         </div>
@@ -60,7 +60,7 @@
           </section>
 
           <section class="sl-workspace__drawer-section">
-            <div class="sl-workspace__drawer-section-title">Direct messages</div>
+            <div class="sl-workspace__drawer-section-title">Private channels</div>
             <div v-if="!filteredDirectChats.length" class="sl-workspace__drawer-empty">
               No conversations found
             </div>
