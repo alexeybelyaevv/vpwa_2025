@@ -6,18 +6,32 @@
       class="message"
       :class="{
         'message--own': msg.senderId === currentUser,
-        'message--mentioned': msg.mentioned?.includes(currentUser)
+        'message--mentioned': msg.mentioned?.includes(currentUser),
+        'message--system': msg.system === true
       }"
     >
-      <div class="message__inner">
-        <div class="message__avatar" aria-hidden="true">
+      <div class="message__inner" :class="{ 'message__inner--system': msg.system }">
+        <div v-if="!msg.system" class="message__avatar" aria-hidden="true">
           {{ msg.senderId === currentUser ? 'You' : getInitial(msg.senderId) }}
         </div>
-        <div class="message__bubble">
-          <div class="message__meta">
-            <span class="message__author">
+        <div class="message__bubble" :class="{ 'message__bubble--system': msg.system }">
+          <div v-if="!msg.system" class="message__meta">
+            <span
+              class="message__author"
+              :class="{ 'message__author--clickable': msg.senderId !== currentUser }"
+              @click="handleAuthorClick(msg.senderId, currentUser)"
+            >
               {{ msg.senderId === currentUser ? 'You' : msg.senderId }}
             </span>
+            <span
+              v-if="msg.mentioned?.includes(currentUser)"
+              class="message__tag"
+            >
+              Mentioned you
+            </span>
+          </div>
+          <div v-else class="message__meta message__meta--system">
+            <span class="message__author message__author--system">System</span>
           </div>
           <p class="message__content">
             {{ msg.text }}
@@ -36,8 +50,17 @@ defineProps<{
   currentUser: string
 }>()
 
+const emit = defineEmits<{
+  (e: 'author-click', nickName: string): void
+}>()
+
 function getInitial(senderId: string): string {
   return senderId.slice(0, 1).toUpperCase()
+}
+
+function handleAuthorClick(senderId: string, currentUser: string): void {
+  if (!senderId || senderId === currentUser || senderId === 'system') return
+  emit('author-click', senderId)
 }
 </script>
 
@@ -58,6 +81,10 @@ function getInitial(senderId: string): string {
   justify-content: flex-end;
 }
 
+.message--system {
+  justify-content: center;
+}
+
 .message__inner {
   display: flex;
   align-items: flex-end;
@@ -67,6 +94,12 @@ function getInitial(senderId: string): string {
 
 .message--own .message__inner {
   flex-direction: row-reverse;
+}
+
+.message__inner--system {
+  flex-direction: column;
+  align-items: center;
+  max-width: min(80%, 460px);
 }
 
 .message__avatar {
@@ -102,6 +135,21 @@ function getInitial(senderId: string): string {
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.message__bubble--system {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  border-radius: 14px;
+  text-align: center;
+  color: rgba(226, 232, 240, 0.88);
+  box-shadow: none;
+}
+
+.message--mentioned .message__bubble {
+  border-color: rgba(251, 191, 36, 0.75);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(217, 119, 6, 0.1));
+  box-shadow: 0 18px 30px rgba(251, 191, 36, 0.25);
+}
+
 .message--own .message__bubble {
   background: linear-gradient(135deg, rgba(76, 29, 149, 0.9), rgba(37, 99, 235, 0.88));
   border-radius: 18px 18px 6px 18px;
@@ -125,6 +173,21 @@ function getInitial(senderId: string): string {
   color: rgba(255, 255, 255, 0.55);
 }
 
+.message__tag {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(251, 191, 36, 0.18);
+  color: rgba(251, 191, 36, 0.92);
+}
+
+.message__meta--system {
+  justify-content: center;
+}
+
 .message--own .message__meta {
   justify-content: flex-end;
   color: rgba(226, 232, 240, 0.75);
@@ -134,6 +197,20 @@ function getInitial(senderId: string): string {
   font-weight: 700;
   letter-spacing: 0.05em;
   color: rgba(129, 140, 248, 0.9);
+}
+
+.message__author--clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.message__author--clickable:hover {
+  color: rgba(191, 219, 254, 0.95);
+}
+
+.message__author--system {
+  color: rgba(148, 163, 184, 0.85);
 }
 
 .message--own .message__author {
