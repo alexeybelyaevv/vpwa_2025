@@ -118,7 +118,7 @@ async function handleLogin() {
     return;
   }
 
-  await router.push('/');
+  await router.push('/workspace');
 }
 
 function goToRegister() {

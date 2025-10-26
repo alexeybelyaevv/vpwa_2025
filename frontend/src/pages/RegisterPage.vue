@@ -131,7 +131,7 @@ const emailTouched = ref(false);
 const passwordTouched = ref(false);
 const confirmPasswordTouched = ref(false);
 
-const emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const nameError = computed(() => {
   if (!name.value.trim()) return 'First name is required';
@@ -179,7 +179,7 @@ const isRegisterValid = computed(
     !confirmPasswordError.value,
 );
 
-function handleRegister() {
+async function handleRegister() {
   nameTouched.value = true;
   surnameTouched.value = true;
   nicknameTouched.value = true;
@@ -188,7 +188,7 @@ function handleRegister() {
   confirmPasswordTouched.value = true;
 
   if (!isRegisterValid.value) return;
-
+  await router.push('/workspace');
   // Registration logic goes here
 }
 
