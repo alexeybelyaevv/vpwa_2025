@@ -39,8 +39,8 @@
       </div>
 
       <div class="sl-header__profile">
-        <span class="sl-header__profile-name">{{ userName }}</span>
-        <span class="sl-header__profile-role">{{ userRole }}</span>
+        <span class="sl-header__profile-name">John Doe</span>
+        <span class="sl-header__profile-role">{{ displayHandle }}</span>
       </div>
 
       <q-btn
@@ -87,6 +87,19 @@
               </q-item-section>
             </q-item>
             <q-separator spaced :style="separatorStyle" />
+            <div class="sl-header__menu-title" :style="headerMenuTitleStyle">Notifications</div>
+            <q-item>
+              <q-item-section>
+                <div :style="headerMenuLabelStyle">Only mentions</div>
+                <div :style="headerMenuDescriptionStyle">
+                  Send alerts only when someone mentions you while the app is hidden.
+                </div>
+              </q-item-section>
+              <q-item-section side>
+                <q-toggle v-model="notifyOnlyMentions" color="primary" dense keep-color />
+              </q-item-section>
+            </q-item>
+            <q-separator spaced :style="separatorStyle" />
             <q-item
               clickable
               v-close-popup
@@ -111,6 +124,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useChatStore } from 'src/stores/chat-commands-store';
 
 const props = defineProps<{
   isMobile: boolean;
@@ -121,8 +135,7 @@ const emit = defineEmits<{
   (e: 'toggle-nav'): void;
 }>();
 
-const userName = 'Alex Carter';
-const userRole = 'Product Designer';
+const chatCommandsStore = useChatStore();
 
 const statuses = [
   {
@@ -132,32 +145,42 @@ const statuses = [
     description: 'Available to collaborate',
   },
   {
-    value: 'idle',
-    label: 'Idle',
-    color: '#faa61a',
-    description: 'Stepping away for a moment',
-  },
-  {
     value: 'dnd',
     label: 'Do Not Disturb',
     color: '#f04747',
     description: 'Focusing — notifications muted',
   },
   {
-    value: 'invisible',
-    label: 'Invisible',
-    color: '#747f8d',
-    description: 'Appear offline but stay updated',
+    value: 'offline',
+    label: 'Offline',
+    color: '#64748b',
+    description: 'Pause updates until you return',
   },
 ] as const;
 
 type StatusValue = (typeof statuses)[number]['value'];
 
-const activeStatusValue = ref<StatusValue>('online');
+const activeStatusValue = computed<StatusValue>({
+  get: () => chatCommandsStore.state.status as StatusValue,
+  set: (value) => {
+    chatCommandsStore.setStatus(value);
+  },
+});
 
 const activeStatus = computed(() => {
   return statuses.find((status) => status.value === activeStatusValue.value) ?? statuses[0];
 });
+
+const notifyOnlyMentions = computed({
+  get: () => chatCommandsStore.state.notifyOnlyMentions,
+  set: (value: boolean) => {
+    chatCommandsStore.setNotifyOnlyMentions(value);
+  },
+});
+
+const profile = computed(() => chatCommandsStore.state.profile);
+
+const displayHandle = computed(() => `@${profile.value.nickName}`);
 
 const isMobile = computed(() => props.isMobile);
 
@@ -403,6 +426,7 @@ function handleLogout() {
 .sl-header__profile-name {
   font-weight: 600;
   font-size: 15px;
+  white-space: nowrap;
 }
 
 .sl-header__profile-role {

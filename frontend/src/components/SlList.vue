@@ -9,7 +9,10 @@
         v-for="item in list"
         :key="item.title"
         class="sl-list__item"
-        :class="{ 'sl-list__item--active': isActive(item) }"
+        :class="{
+          'sl-list__item--active': isActive(item),
+          'sl-list__item--invite': item.inviteHighlighted
+        }"
         role="button"
         tabindex="0"
         @click="goToChat(item)"
@@ -17,6 +20,7 @@
         @keydown.space.prevent="goToChat(item)"
       >
         <span class="sl-list__item-name">{{ item.title }}</span>
+        <span v-if="item.inviteHighlighted" class="sl-list__item-indicator">New</span>
       </li>
     </ul>
   </div>
@@ -34,7 +38,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'select'): void
+  (e: 'select', chat: Chat): void
 }>()
 
 const router = useRouter()
@@ -56,7 +60,7 @@ function goToChat(chat: Chat) {
   if (slug === activeSlug.value) return
 
   void router.push({ name: 'workspace-chat', params: { chatSlug: slug } })
-  emit('select')
+  emit('select', chat)
 }
 </script>
 
@@ -121,6 +125,16 @@ function goToChat(chat: Chat) {
   color: #fff;
 }
 
+.sl-list__item--invite {
+  position: relative;
+  border: 1px solid rgba(250, 204, 21, 0.32);
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.sl-list__item--invite:hover {
+  background: rgba(250, 204, 21, 0.12);
+}
+
 .sl-list__item--active {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.58), rgba(118, 75, 162, 0.65));
   color: #fff;
@@ -133,6 +147,17 @@ function goToChat(chat: Chat) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sl-list__item-indicator {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.2);
+  color: rgba(250, 204, 21, 0.92);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 @media (max-width: 900px) {

@@ -19,10 +19,30 @@
         </template>
         <sl-messages-list
           :messages="currentMessages"
-          :current-user="chatCommandsStore.state.currentUser"
+          :current-user="currentUser"
+          @author-click="openTypingPreview"
         />
       </q-infinite-scroll>
     </q-scroll-area>
+    <div v-if="isOffline" class="sl-chat__offline-banner">
+      You are offline. Messages will refresh once you come back online.
+    </div>
+    <q-dialog v-model="showTypingPreview" persistent transition-show="scale" transition-hide="scale">
+      <q-card class="sl-chat__preview-dialog">
+        <q-card-section class="sl-chat__preview-header">
+          <div class="sl-chat__preview-title">{{ typingPreviewUser }}</div>
+          <div class="sl-chat__preview-subtitle">Live draft preview</div>
+        </q-card-section>
+        <q-card-section class="sl-chat__preview-body">
+          <div class="sl-chat__preview-content">
+            {{ typingPreviewText }}
+          </div>
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat color="primary" label="Close" @click="showTypingPreview = false" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
     <!-- Typing Indicator -->
     <div v-if="typingUser" class="typing-indicator q-pa-sm">
       {{ typingUser }} is typing...
@@ -81,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
 import SlMessagesList from './SlMessagesList.vue';
 import SlChatHeader from './SlChatHeader.vue';
 import { useChatStore } from 'src/stores/chat-commands-store';
@@ -105,7 +125,27 @@ const showMenu = ref(false);
 const inputRef: Ref<QInput | null> = ref(null);
 const highlightedIndex = ref(-1);
 const hoveredCommandIndex = ref<number | null>(null);
-const typingUser = ref<string | null>(null); 
+const typingUser = ref<string | null>(null);
+const currentUser = computed(() => chatCommandsStore.state.profile.nickName);
+const isOffline = computed(() => chatCommandsStore.state.status === 'offline');
+const showTypingPreview = ref(false);
+const typingPreviewUser = ref<string | null>(null);
+const typingPreviewText = computed(() => {
+  if (!typingPreviewUser.value) {
+    return 'No live draft available yet.';
+  }
+  return (
+    chatCommandsStore.state.typingDrafts[typingPreviewUser.value] ??
+    'No live draft available yet.'
+  );
+});
+const typingPreviewIntervals: Record<string, number> = {};
+const typingSentences = [
+  'Finalizing the release notes for tomorrow',
+  'Drafting the sprint retrospective summary',
+  'Reviewing the accessibility checklist update',
+  'Sketching new ideas for the mobile navigation',
+] as const;
 
 const inputElement = computed(() => {
   return inputRef.value?.$el.querySelector('input') || inputRef.value?.$el;
@@ -220,18 +260,57 @@ async function sendMessage() {
 }
 
 function onUserTyping() {
+  if (typingUser.value) return;
   if (Math.random() < 0.3) {
     simulateTyping();
   }
 }
 
+function startTypingPreview(user: string) {
+  stopTypingPreview(user);
+  const sentence = typingSentences[Math.floor(Math.random() * typingSentences.length)]!;
+  const words = sentence.split(' ');
+  let progress = 1;
+  chatCommandsStore.setTypingDraft(user, words.slice(0, progress).join(' '));
+  if (typeof window === 'undefined') {
+    return;
+  }
+  typingPreviewIntervals[user] = window.setInterval(() => {
+    progress = Math.min(progress + 1, words.length);
+    const text = words.slice(0, progress).join(' ');
+    const suffix = progress < words.length ? ' …' : '';
+    chatCommandsStore.setTypingDraft(user, `${text}${suffix}`);
+    if (progress >= words.length) {
+      progress = Math.max(1, Math.floor(words.length / 2));
+    }
+  }, 700);
+}
+
+function stopTypingPreview(user: string) {
+  const interval = typingPreviewIntervals[user];
+  if (interval) {
+    clearInterval(interval);
+    delete typingPreviewIntervals[user];
+  }
+  chatCommandsStore.clearTypingDraft(user);
+}
+
 function simulateTyping() {
+  if (typingUser.value) return;
   const users = ['Ed', 'Alice', 'Bob'];
-  typingUser.value = users[Math.floor(Math.random() * users.length)]!;
+  const user = users[Math.floor(Math.random() * users.length)]!;
+  typingUser.value = user;
+  startTypingPreview(user);
   setTimeout(() => {
     typingUser.value = null;
+    stopTypingPreview(user);
     setTimeout(simulateTyping, Math.random() * 5000 + 2000);
   }, 3000);
+}
+
+function openTypingPreview(nickname: string) {
+  typingPreviewUser.value = nickname;
+  showTypingPreview.value = true;
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -264,6 +343,18 @@ watch(showMenu, (newValue) => {
     highlightedIndex.value = -1;
     hoveredCommandIndex.value = null;
   }
+});
+
+watch(showTypingPreview, (visible) => {
+  if (!visible) {
+    typingPreviewUser.value = null;
+  }
+});
+
+onBeforeUnmount(() => {
+  Object.keys(typingPreviewIntervals).forEach((user) => {
+    stopTypingPreview(user);
+  });
 });
 
 watch(() => chatCommandsStore.state.currentChannel, async (newChannel) => {
@@ -330,6 +421,57 @@ watch(() => chatCommandsStore.state.currentChannel, async (newChannel) => {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.sl-chat__offline-banner {
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  color: rgba(250, 204, 21, 0.88);
+  background: rgba(250, 204, 21, 0.12);
+  border-top: 1px solid rgba(250, 204, 21, 0.18);
+  border-bottom: 1px solid rgba(250, 204, 21, 0.12);
+}
+
+.sl-chat__preview-dialog {
+  min-width: 360px;
+  background: linear-gradient(135deg, #151922 0%, #10141c 100%);
+  color: #e2e8f0;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.sl-chat__preview-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sl-chat__preview-title {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sl-chat__preview-subtitle {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(148, 163, 184, 0.7);
+}
+
+.sl-chat__preview-body {
+  background: rgba(15, 18, 26, 0.85);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.sl-chat__preview-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(226, 232, 240, 0.88);
+}
+
 :deep(.sl-command-menu__surface) {
   background: linear-gradient(135deg, #08090d 0%, #131924 100%) !important;
   border-radius: 16px !important;
@@ -352,5 +494,12 @@ watch(() => chatCommandsStore.state.currentChannel, async (newChannel) => {
 
 :deep(.sl-command-menu__surface .q-item:hover) {
   background: rgba(148, 163, 184, 0.14) !important;
+}
+
+@media (max-width: 600px) {
+  .sl-chat__preview-dialog {
+    width: calc(100vw - 32px);
+    min-width: 0;
+  }
 }
 </style>
