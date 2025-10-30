@@ -11,7 +11,7 @@
         class="sl-list__item"
         :class="{
           'sl-list__item--active': isActive(item),
-          'sl-list__item--invite': item.inviteHighlighted
+          'sl-list__item--invite': item.inviteHighlighted,
         }"
         role="button"
         tabindex="0"
@@ -27,40 +27,40 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import type { Chat } from 'src/types'
-import { chatTitleToSlug } from 'src/utils/chat'
+import { computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import type { Chat } from 'src/types';
+import { chatTitleToSlug } from 'src/utils/chat';
 
 defineProps<{
-  list: Chat[]
-  title: string
-}>()
+  list: Chat[];
+  title: string;
+}>();
 
 const emit = defineEmits<{
-  (e: 'select', chat: Chat): void
-}>()
+  (e: 'select', chat: Chat): void;
+}>();
 
-const router = useRouter()
-const route = useRoute()
+const router = useRouter();
+const route = useRoute();
 
 const activeSlug = computed(() => {
-  return typeof route.params.chatSlug === 'string' ? route.params.chatSlug : ''
-})
+  return typeof route.params.chatSlug === 'string' ? route.params.chatSlug : '';
+});
 
 function isActive(chat: Chat) {
-  const slug = chatTitleToSlug(chat.title)
-  return slug === activeSlug.value
+  const slug = chatTitleToSlug(chat.title);
+  return slug === activeSlug.value;
 }
 
 function goToChat(chat: Chat) {
-  const slug = chatTitleToSlug(chat.title)
-  if (!slug) return
+  const slug = chatTitleToSlug(chat.title);
+  if (!slug) return;
 
-  if (slug === activeSlug.value) return
+  if (slug === activeSlug.value) return;
 
-  void router.push({ name: 'workspace-chat', params: { chatSlug: slug } })
-  emit('select', chat)
+  void router.push({ name: 'workspace-chat', params: { chatSlug: slug } });
+  emit('select', chat);
 }
 </script>
 
@@ -116,7 +116,9 @@ function goToChat(chat: Chat) {
   border-radius: 12px;
   cursor: pointer;
   color: rgba(255, 255, 255, 0.68);
-  transition: background 0.25s ease, color 0.25s ease;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease;
   user-select: none;
 }
 

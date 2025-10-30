@@ -326,6 +326,7 @@ export const useChatStore = defineStore('chat', () => {
       chatId: channelTitle,
       senderId,
       text,
+      mentioned: text.includes('@alex.carter') ? ['alex.carter'] : [],
       createdAt: timestamp,
       ...(mentioned && mentioned.length > 0 ? { mentioned } : {}),
     };
