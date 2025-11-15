@@ -72,8 +72,11 @@ defineOptions({
 
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import axios, { type AxiosError } from 'axios'
+import { useQuasar } from 'quasar'
 
 const router = useRouter();
+const $q = useQuasar()
 
 const loginEmail = ref('');
 const loginPassword = ref('');
@@ -117,8 +120,33 @@ async function handleLogin() {
   if (!isLoginValid.value) {
     return;
   }
+  try {
+    const response = await axios.post('http://localhost:3333/login', {
+      email: loginEmail.value.trim(),
+      password: loginPassword.value,
+    })
 
-  await router.push('/workspace');
+    console.log('LOGIN SUCCESS:', response.data)
+
+    localStorage.setItem('token', response.data.token)
+
+    $q.notify({
+      type: 'positive',
+      message: 'Login successful',
+      icon: 'check'
+    })
+
+    await router.push('/workspace')
+
+  } catch (err: unknown) {
+    const error = err as AxiosError<{ error: string }>
+
+    $q.notify({
+      type: 'negative',
+      message: error.response?.data?.error || 'Login failed',
+      icon: 'warning'
+    })
+  }
 }
 
 function goToRegister() {

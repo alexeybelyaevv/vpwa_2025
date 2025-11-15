@@ -114,7 +114,11 @@ defineOptions({ name: 'RegisterPage' });
 
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-
+import axios from 'axios';
+import type { AxiosError } from 'axios'
+import { useQuasar } from 'quasar';
+import type { BackendError } from 'src/types';
+const $q = useQuasar();
 const router = useRouter();
 
 const name = ref('');
@@ -188,8 +192,33 @@ async function handleRegister() {
   confirmPasswordTouched.value = true;
 
   if (!isRegisterValid.value) return;
-  await router.push('/workspace');
-  // Registration logic goes here
+
+  const body = {
+    firstName: name.value.trim(),
+    lastName: surname.value.trim(),
+    nickname: nickname.value.trim(),
+    email: email.value.trim(),
+    password: password.value,
+  };
+
+  try {
+    const res = await axios.post('http://localhost:3333/register', body);
+
+    console.log('Backend response:', res.data);
+
+    await router.push('/workspace');
+  } catch (err: unknown) {
+  const error = err as AxiosError<BackendError>;
+
+  const backendMessage =
+    error.response?.data?.error || 'Registration failed';
+
+  $q.notify({
+    type: 'negative',
+    icon: 'warning',
+    message: backendMessage,
+  });
+}
 }
 
 function goToLogin() {

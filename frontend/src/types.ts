@@ -31,3 +31,7 @@ export interface Message {
   createdAt?: number
   system?: boolean
 }
+
+export interface BackendError {
+  error?: string
+}
