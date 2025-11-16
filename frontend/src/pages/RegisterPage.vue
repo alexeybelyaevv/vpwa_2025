@@ -118,6 +118,7 @@ import axios from 'axios';
 import type { AxiosError } from 'axios'
 import { useQuasar } from 'quasar';
 import type { BackendError } from 'src/types';
+import { api } from '../api'
 const $q = useQuasar();
 const router = useRouter();
 
@@ -202,10 +203,10 @@ async function handleRegister() {
   };
 
   try {
-    const res = await axios.post('http://localhost:3333/register', body);
+    const res = await api.post('/register', body);
 
     console.log('Backend response:', res.data);
-
+    localStorage.setItem('token', res.data.token)
     await router.push('/workspace');
   } catch (err: unknown) {
   const error = err as AxiosError<BackendError>;

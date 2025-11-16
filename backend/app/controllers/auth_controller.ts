@@ -27,13 +27,16 @@ export default class AuthController {
       password: payload.password,
     })
 
+    const token = await User.accessTokens.create(user)
+
     return response.created({
-      message: 'User registered',
-      user: {
+    message: 'User registered',
+    token: token.value!.release(),
+    user: {
         id: user.id,
         nickname: user.nickname,
         email: user.email,
-      },
+    },
     })
   }
     public async login({ request, response }: HttpContext) {

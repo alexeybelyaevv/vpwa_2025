@@ -74,6 +74,7 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import axios, { type AxiosError } from 'axios'
 import { useQuasar } from 'quasar'
+import { api } from '../api'
 
 const router = useRouter();
 const $q = useQuasar()
@@ -121,7 +122,7 @@ async function handleLogin() {
     return;
   }
   try {
-    const response = await axios.post('http://localhost:3333/login', {
+    const response = await api.post('/login', {
       email: loginEmail.value.trim(),
       password: loginPassword.value,
     })
