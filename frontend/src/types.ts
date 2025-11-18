@@ -1,3 +1,8 @@
+import type { AxiosError } from 'axios'
+
+export interface WrappedAxiosError extends Error {
+  original: AxiosError
+}
 export type ChannelType = 'public' | 'private'
 
 export type UserStatus = 'online' | 'dnd' | 'offline'

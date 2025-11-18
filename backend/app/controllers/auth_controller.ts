@@ -34,12 +34,14 @@ export default class AuthController {
     token: token.value!.release(),
     user: {
         id: user.id,
-        nickname: user.nickname,
+        nickName: user.nickname,
         email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName
     },
     })
   }
-    public async login({ request, response }: HttpContext) {
+  public async login({ request, response }: HttpContext) {
     const payload = await request.validateUsing(loginValidator)
 
     const user = await User.findBy('email', payload.email)
@@ -59,9 +61,23 @@ export default class AuthController {
       token: token.value!.release(),
       user: {
         id: user.id,
-        nickname: user.nickname,
+        nickName: user.nickname,
         email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName
       },
     }
   }
+  public async getUser({ auth, response }: HttpContext) {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ error: 'Unauthorized' })
+    }
+    return response.ok({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      nickName: user.nickname,
+      email: user.email,
+    })
+    }
 }

@@ -72,10 +72,11 @@ defineOptions({
 
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import axios, { type AxiosError } from 'axios'
+import { type AxiosError } from 'axios'
 import { useQuasar } from 'quasar'
 import { api } from '../api'
-
+import { useChatStore } from 'src/stores/chat-commands-store';
+const chatCommandsStore = useChatStore();
 const router = useRouter();
 const $q = useQuasar()
 
@@ -136,7 +137,8 @@ async function handleLogin() {
       message: 'Login successful',
       icon: 'check'
     })
-
+    chatCommandsStore.state.profile = response.data.user;
+    console.log(chatCommandsStore.state.profile);
     await router.push('/workspace')
 
   } catch (err: unknown) {
