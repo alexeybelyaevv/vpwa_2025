@@ -15,6 +15,7 @@ export interface UserProfile {
 }
 
 export interface Chat {
+  id: number 
   title: string
   type: ChannelType
   admin: string

@@ -82,6 +82,7 @@ export const useChatStore = defineStore('chat', () => {
       const channel = res.data.channel;
       console.log(channel);
       state.channels.push({
+        id: channel.id,
         title: channel.name,
         type: channel.type,
         admin: me,
@@ -130,6 +131,7 @@ export const useChatStore = defineStore('chat', () => {
       }
       if (!getChannelByTitle(channel.name)) {
         state.channels.push({
+          id: channel.id,
           title: channel.name,
           type: channel.type,
           admin: channel.ownerId,
@@ -275,28 +277,53 @@ export const useChatStore = defineStore('chat', () => {
       touchChannel(channel);
     }
   }
-  function quit() {
-    if (!state.currentChannel) return;
-    const channel = getChannelByTitle(state.currentChannel);
-    if (!channel || channel.admin !== getCurrentUser()) return;
-    state.channels = state.channels.filter((c) => c.title !== state.currentChannel);
-    delete state.messages[state.currentChannel];
-    delete state.pendingMessages[state.currentChannel];
-    state.currentChannel = null;
-  }
-
-  function cancel() {
-    if (!state.currentChannel) return;
-    const channel = getChannelByTitle(state.currentChannel);
+  async function quit() {
+    const channel = getChannelByTitle(state.currentChannel!);
     if (!channel) return;
-    const me = getCurrentUser();
-    channel.members = channel.members.filter((m) => m !== me);
-    if (channel.admin === me) {
-      quit();
-    } else {
+    try {
+      await api.delete(`/channels/${channel.id}`);
+      state.channels = state.channels.filter(c => c.title !== channel.title);
+      delete state.messages[channel.title];
+      delete state.pendingMessages[channel.title];
       state.currentChannel = null;
+      $q.notify({
+        type: 'negative',
+        message: `Channel #${channel.title} deleted`,
+        icon: 'delete'
+      });
+    } catch (err) {
+      console.error(err);
     }
   }
+
+  async function cancel() {
+    const channel = getChannelByTitle(state.currentChannel!);
+    if (!channel) return;
+    try {
+      await api.post(`/channels/${channel.id}/leave`);
+      if (channel.admin !== getCurrentUser()) {
+        channel.members = channel.members.filter(m => m !== getCurrentUser());
+        state.currentChannel = null;
+        $q.notify({
+          type: 'info',
+          message: `You left #${channel.title}`,
+          icon: 'logout'
+        });
+        return;
+      }
+      state.channels = state.channels.filter(c => c.title !== channel.title);
+      delete state.messages[channel.title];
+      state.currentChannel = null;
+      $q.notify({
+        type: 'negative',
+        message: `Channel #${channel.title} closed`,
+        icon: 'delete'
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
 
   async function processCommand(command: string) {
     const parts = command.slice(1).trim().split(/\s+/);
@@ -320,10 +347,10 @@ export const useChatStore = defineStore('chat', () => {
         if (arg) kick(arg);
         break;
       case 'quit':
-        quit();
+        await quit();
         break;
       case 'cancel':
-        cancel();
+        await cancel();
         break;
       case 'list':
         listMembers();
@@ -436,33 +463,33 @@ export const useChatStore = defineStore('chat', () => {
     channel.inviteHighlighted = false;
   }
 
-  function receiveInvite(title: string, type: ChannelType) {
-    const me = getCurrentUser();
-    let channel = getChannelByTitle(title);
-    const timestamp = Date.now();
-    if (!channel) {
-      channel = {
-        title,
-        type,
-        admin: me,
-        members: [me],
-        banned: [],
-        kicks: {},
-        createdAt: timestamp,
-        lastActivityAt: timestamp,
-        inviteHighlighted: true,
-        inviteReceivedAt: timestamp,
-      };
-      state.channels.push(channel);
-      ensureMessageCollections(title);
-    } else {
-      if (!channel.members.includes(me)) {
-        channel.members.push(me);
-      }
-      channel.inviteHighlighted = true;
-      channel.inviteReceivedAt = timestamp;
-    }
-  }
+  // function receiveInvite(title: string, type: ChannelType) {
+  //   const me = getCurrentUser();
+  //   let channel = getChannelByTitle(title);
+  //   const timestamp = Date.now();
+  //   if (!channel) {
+  //     channel = {
+  //       title,
+  //       type,
+  //       admin: me,
+  //       members: [me],
+  //       banned: [],
+  //       kicks: {},
+  //       createdAt: timestamp,
+  //       lastActivityAt: timestamp,
+  //       inviteHighlighted: true,
+  //       inviteReceivedAt: timestamp,
+  //     };
+  //     state.channels.push(channel);
+  //     ensureMessageCollections(title);
+  //   } else {
+  //     if (!channel.members.includes(me)) {
+  //       channel.members.push(me);
+  //     }
+  //     channel.inviteHighlighted = true;
+  //     channel.inviteReceivedAt = timestamp;
+  //   }
+  // }
 
   function setTypingDraft(nickName: string, draft: string) {
     state.typingDrafts[nickName] = draft;
@@ -592,7 +619,7 @@ export const useChatStore = defineStore('chat', () => {
     setStatus,
     setNotifyOnlyMentions,
     markInviteSeen,
-    receiveInvite,
+    //receiveInvite,
     listMembers,
     setTypingDraft,
     clearTypingDraft,

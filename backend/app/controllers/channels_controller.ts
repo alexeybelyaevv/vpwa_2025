@@ -123,7 +123,6 @@ export default class ChannelsController {
         error: 'Cannot join a private channel. Ask the admin to invite you.',
       });
     }
-
     await ChannelMember.create({
       userId: user.id,
       channelId: channel.id,
@@ -134,5 +133,42 @@ export default class ChannelsController {
       channel,
     });
   }
+  public async delete({ auth, params, response }: HttpContext) {
+    const user = auth.user
+    if (!user) return response.unauthorized({ error: 'Unauthorized' })
+    const channel = await Channel.find(params.id)
+    if (!channel) return response.notFound({ error: 'Channel not found' })
+    if (channel.ownerId !== user.id) {
+      return response.forbidden({ error: 'Only admin can close the channel' })
+    }
+    await channel.delete()
+    return response.ok({
+      message: `Channel "${channel.name}" was deleted`,
+    })
+  }
+  public async leave({ auth, params, response }: HttpContext) {
+    const user = auth.user
+    if (!user) return response.unauthorized({ error: 'Unauthorized' })
+    const channel = await Channel.find(params.id)
+    if (!channel) return response.notFound({ error: 'Channel not found' })
+    const membership = await ChannelMember
+      .query()
+      .where('channel_id', params.id)
+      .andWhere('user_id', user.id)
+      .first()
+    if (!membership) {
+      return response.badRequest({ error: 'You are not a member of this channel' })
+    }
+    if (channel.ownerId === user.id) {
+      await channel.delete()
+      return response.ok({ message: `Admin left channel "${channel.name}" deleted` })
+    }
+    await membership.delete()
+
+    return response.ok({
+      message: `You left channel "${channel.name}"`,
+    })
+  }
+
 
 }
