@@ -13,4 +13,7 @@ router.group(() => {
   router.post('/channels/join', [ChannelsController, 'join'])
   router.post('/channels/:id/leave', [ChannelsController, 'leave'])
   router.delete('/channels/:id', [ChannelsController, 'delete'])
+  router.post('/channels/invite', [ChannelsController, 'invite'])
+  router.post('/channels/revoke', [ChannelsController, 'revoke'])
+  router.post('/channels/kick', [ChannelsController, 'kick'])
 }).middleware([middleware.auth()])
