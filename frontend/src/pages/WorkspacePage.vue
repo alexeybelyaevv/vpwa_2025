@@ -220,10 +220,16 @@ import { useChatStore } from 'src/stores/chat-commands-store';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { chatTitleToSlug } from 'src/utils/chat';
+import { setUnauthorizedHandler } from 'src/api'
 
+
+const router = useRouter()
+
+setUnauthorizedHandler(() => {
+  void router.push('/login')
+})
 const chatCommandsStore = useChatStore();
 const route = useRoute();
-const router = useRouter();
 const $q = useQuasar();
 
 const showMobileNav = ref(false);
@@ -314,8 +320,8 @@ const createChannelOptions = [
 
 const canSubmitChannel = computed(() => newChannelName.value.trim().length >= 2);
 
-onMounted(() => {
-  chatCommandsStore.initialize();
+onMounted(async () => {
+  await chatCommandsStore.initialize();
   syncChannelWithRoute();
 });
 
@@ -401,7 +407,7 @@ function openCreateChannelDialog(type?: ChannelType) {
   showCreateChannel.value = true;
 }
 
-function handleCreateChannel() {
+async function handleCreateChannel() {
   const trimmed = newChannelName.value.trim();
   if (!trimmed) {
     createChannelError.value = 'Channel name is required';
@@ -415,7 +421,7 @@ function handleCreateChannel() {
     createChannelError.value = 'Channel name is already in use';
     return;
   }
-  chatCommandsStore.createChannel(trimmed, newChannelType.value);
+  await chatCommandsStore.createChannel(trimmed, newChannelType.value);
   $q.notify({
     icon: 'check',
     color: 'positive',

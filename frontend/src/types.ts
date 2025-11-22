@@ -1,3 +1,8 @@
+import type { AxiosError } from 'axios'
+
+export interface WrappedAxiosError extends Error {
+  original: AxiosError
+}
 export type ChannelType = 'public' | 'private'
 
 export type UserStatus = 'online' | 'dnd' | 'offline'
@@ -10,6 +15,7 @@ export interface UserProfile {
 }
 
 export interface Chat {
+  id: number 
   title: string
   type: ChannelType
   admin: string
@@ -30,4 +36,8 @@ export interface Message {
   mentioned?: string[]
   createdAt?: number
   system?: boolean
+}
+
+export interface BackendError {
+  error?: string
 }

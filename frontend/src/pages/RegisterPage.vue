@@ -114,9 +114,15 @@ defineOptions({ name: 'RegisterPage' });
 
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-
+import type { AxiosError } from 'axios'
+import { useQuasar } from 'quasar';
+import type { BackendError } from 'src/types';
+import { api } from '../api'
+import { useChatStore } from 'src/stores/chat-commands-store';
+const $q = useQuasar();
 const router = useRouter();
 
+const chatCommandsStore = useChatStore();
 const name = ref('');
 const surname = ref('');
 const nickname = ref('');
@@ -188,8 +194,34 @@ async function handleRegister() {
   confirmPasswordTouched.value = true;
 
   if (!isRegisterValid.value) return;
-  await router.push('/workspace');
-  // Registration logic goes here
+
+  const body = {
+    firstName: name.value.trim(),
+    lastName: surname.value.trim(),
+    nickname: nickname.value.trim(),
+    email: email.value.trim(),
+    password: password.value,
+  };
+
+  try {
+    const res = await api.post('/register', body);
+
+    console.log('Backend response:', res.data);
+    localStorage.setItem('token', res.data.token)
+    chatCommandsStore.state.profile = res.data.user;
+    await router.push('/workspace');
+  } catch (err: unknown) {
+  const error = err as AxiosError<BackendError>;
+
+  const backendMessage =
+    error.response?.data?.error || 'Registration failed';
+
+  $q.notify({
+    type: 'negative',
+    icon: 'warning',
+    message: backendMessage,
+  });
+}
 }
 
 function goToLogin() {

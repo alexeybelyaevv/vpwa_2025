@@ -72,8 +72,13 @@ defineOptions({
 
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-
+import { type AxiosError } from 'axios'
+import { useQuasar } from 'quasar'
+import { api } from '../api'
+import { useChatStore } from 'src/stores/chat-commands-store';
+const chatCommandsStore = useChatStore();
 const router = useRouter();
+const $q = useQuasar()
 
 const loginEmail = ref('');
 const loginPassword = ref('');
@@ -117,8 +122,34 @@ async function handleLogin() {
   if (!isLoginValid.value) {
     return;
   }
+  try {
+    const response = await api.post('/login', {
+      email: loginEmail.value.trim(),
+      password: loginPassword.value,
+    })
 
-  await router.push('/workspace');
+    console.log('LOGIN SUCCESS:', response.data)
+
+    localStorage.setItem('token', response.data.token)
+
+    $q.notify({
+      type: 'positive',
+      message: 'Login successful',
+      icon: 'check'
+    })
+    chatCommandsStore.state.profile = response.data.user;
+    console.log(chatCommandsStore.state.profile);
+    await router.push('/workspace')
+
+  } catch (err: unknown) {
+    const error = err as AxiosError<{ error: string }>
+
+    $q.notify({
+      type: 'negative',
+      message: error.response?.data?.error || 'Login failed',
+      icon: 'warning'
+    })
+  }
 }
 
 function goToRegister() {

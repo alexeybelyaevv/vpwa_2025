@@ -3,6 +3,8 @@ import { reactive } from 'vue';
 import type { Chat, Message, ChannelType, UserProfile, UserStatus } from 'src/types';
 import { chatTitleToSlug } from 'src/utils/chat';
 import { useQuasar } from 'quasar';
+import { api } from '../api'
+import type { AxiosError } from 'axios';
 
 export const useChatStore = defineStore('chat', () => {
   const MESSAGES_BATCH_SIZE = 20;
@@ -15,10 +17,10 @@ export const useChatStore = defineStore('chat', () => {
     pendingMessages: {} as Record<string, Message[]>,
     currentChannel: null as string | null,
     profile: {
-      firstName: 'Alex',
-      lastName: 'Carter',
-      nickName: 'alex.carter',
-      email: 'alex.carter@example.com',
+      firstName: '',
+      lastName: '',
+      nickName: '',
+      email: '',
     } as UserProfile,
     status: 'online' as UserStatus,
     notifyOnlyMentions: false,
@@ -69,199 +71,238 @@ export const useChatStore = defineStore('chat', () => {
     state.visibleMessages[channelTitle] = [...initialVisible];
     state.visiblePosition[channelTitle] = start;
   }
-  function createChannel(title: string, type: ChannelType) {
-    if (getChannelByTitle(title)) {
-      return;
-    }
-    const owner = getCurrentUser();
-    const timestamp = Date.now();
-    const chat: Chat = {
-      title,
-      type,
-      admin: owner,
-      members: [owner],
-      banned: [],
-      kicks: {},
-      createdAt: timestamp,
-      lastActivityAt: timestamp,
-    };
-    state.channels.push(chat);
-    ensureMessageCollections(title);
-    state.currentChannel = title;
-  }
-
-  function ensureMember(channel: Chat, nickname: string, highlight = false) {
-    if (!channel.members.includes(nickname)) {
-      channel.members.push(nickname);
-      touchChannel(channel);
-    }
-    if (highlight) {
-      channel.inviteHighlighted = true;
-      channel.inviteReceivedAt = Date.now();
-    }
-  }
-
-  function joinChannel(title: string, isPrivate = false) {
+  async function createChannel(title: string, type: ChannelType) {
     const me = getCurrentUser();
-    const channel = getChannelByTitle(title);
-    if (!channel) {
-      createChannel(title, isPrivate ? 'private' : 'public');
-      return;
-    } else if (
-      channel.type === 'public' &&
-      !channel.banned.includes(me) &&
-      !channel.members.includes(me)
-    ) {
-      channel.members.push(me);
-      channel.inviteHighlighted = false;
-      touchChannel(channel);
-    }
-    state.currentChannel = title;
-  }
-  function invite(nickName: string) {
-    if (!state.currentChannel) return;
-    const channelTitle = state.currentChannel;
-    const channel = getChannelByTitle(channelTitle);
-    if (!channel || channel.members.includes(nickName)) return;
+    try {
+      const res = await api.post('/channels/create', {
+        name: title,
+        type,
+      });
 
-    const me = getCurrentUser();
-    const isAdmin = channel.admin === me;
-    if (channel.type === 'private' && !isAdmin) return;
-
-    if (channel.banned.includes(nickName) && isAdmin) {
-      channel.banned = channel.banned.filter((b) => b !== nickName);
-    }
-    channel.members.push(nickName);
-    ensureMessageCollections(channelTitle);
-    const timestamp = Date.now();
-    appendMessage(channelTitle, {
-      id: timestamp,
-      chatId: channelTitle,
-      senderId: me,
-      text: `${nickName} was invited to ${channelTitle}`,
-      system: true,
-      createdAt: timestamp,
-    });
-    touchChannel(channel);
-    if (nickName === me) {
-      channel.inviteHighlighted = true;
-      channel.inviteReceivedAt = timestamp;
+      const channel = res.data.channel;
+      console.log(channel);
+      state.channels.push({
+        id: channel.id,
+        title: channel.name,
+        type: channel.type,
+        admin: me,
+        members: [me],
+        banned: [],
+        kicks: {},
+        createdAt: Date.now(),
+        lastActivityAt: Date.now(),
+      });
+      console.log(state.channels);
+      ensureMessageCollections(title);
+      state.currentChannel = channel.name;
+    } catch (err) {
+      console.error('Failed to create channel:', err);
     }
   }
-  function revoke(nickName: string) {
-    if (!state.currentChannel) return;
-    const channelTitle = state.currentChannel;
-    const channel = getChannelByTitle(channelTitle);
-    if (!channel || channel.admin !== getCurrentUser() || channel.type !== 'private') return;
-    channel.members = channel.members.filter((m) => m !== nickName);
-    if (!channel.banned.includes(nickName)) {
-      channel.banned.push(nickName);
-    }
-    ensureMessageCollections(channelTitle);
-    const timestamp = Date.now();
-    appendMessage(channelTitle, {
-      id: timestamp,
-      chatId: channelTitle,
-      senderId: getCurrentUser(),
-      text: `${nickName} was revoked from ${channelTitle}`,
-      system: true,
-      createdAt: timestamp,
-    });
-    touchChannel(channel);
-  }
-  function kick(nickName: string) {
-    if (!state.currentChannel) return;
-    const channelTitle = state.currentChannel;
-    const channel = getChannelByTitle(channelTitle);
-    const me = getCurrentUser();
-    if (!channel || nickName === me || !channel.members.includes(nickName)) return;
 
-    const isAdmin = channel.admin === me;
-    ensureMessageCollections(channelTitle);
-    const timestamp = Date.now();
 
-    if (channel.type === 'private' && isAdmin) {
-      channel.members = channel.members.filter((m) => m !== nickName);
-      if (!channel.banned.includes(nickName)) {
-        channel.banned.push(nickName);
+  // function ensureMember(channel: Chat, nickname: string, highlight = false) {
+  //   if (!channel.members.includes(nickname)) {
+  //     channel.members.push(nickname);
+  //     touchChannel(channel);
+  //   }
+  //   if (highlight) {
+  //     channel.inviteHighlighted = true;
+  //     channel.inviteReceivedAt = Date.now();
+  //   }
+  // }
+
+  async function joinChannel(title: string, isPrivate = false) {
+    try {
+      const res = await api.post('/channels/join', {
+        name: title,
+        isPrivate,
+      });
+
+      const channel = res.data.channel;
+      const backendMessage = res.data.message;
+      if (backendMessage) {
+        $q.notify({
+          type: 'positive',
+          color: 'primary',
+          icon: 'chat',
+          message: backendMessage,
+        });
       }
-      appendMessage(channelTitle, {
+      if (!getChannelByTitle(channel.name)) {
+        state.channels.push({
+          id: channel.id,
+          title: channel.name,
+          type: channel.type,
+          admin: channel.ownerId,
+          members: [],
+          banned: [],
+          kicks: {},
+          createdAt: channel.createdAt,
+          lastActivityAt: Date.now(),
+        });
+      }
+      await initialize();
+      state.currentChannel = channel.name;
+    } catch (error) {
+      const err = error as AxiosError<{ error: string }>;
+      const message = err.response?.data?.error || 'Failed to join channel';
+      $q.notify({
+        type: 'warning',
+        icon: 'lock',
+        message,
+      });
+      return;
+    }
+  }
+
+
+  async function invite(nickName: string) {
+    if (!state.currentChannel) return;
+
+    const channel = getChannelByTitle(state.currentChannel);
+    if (!channel) return;
+
+    try {
+      const res = await api.post('/channels/invite', {
+        channelId: channel.id,
+        nickName,
+      });
+
+      const updated = res.data.channel;
+      channel.members = updated.members;
+      if (nickName === getCurrentUser()) {
+        channel.inviteHighlighted = true;
+        channel.inviteReceivedAt = Date.now();
+      }
+      $q.notify({
+        type: 'positive',
+        message: res.data.message ?? `User ${nickName} was invited.`,
+      });
+
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        $q.notify({
+          type: 'negative',
+          message: err.message,
+        });
+        console.error(err);
+      }
+    }
+  }
+
+  async function revoke(nickName: string) {
+    if (!state.currentChannel) return;
+    const channel = getChannelByTitle(state.currentChannel);
+    if (!channel) return;
+    try {
+      const res = await api.post('/channels/revoke', {
+        channelId: channel.id,
+        nickName,
+      });
+      const updated = res.data.channel;
+      channel.members = updated.members;
+      channel.banned = updated.banned;
+      const timestamp = Date.now();
+      appendMessage(channel.title, {
         id: timestamp,
-        chatId: channelTitle,
-        senderId: me,
-        text: `${nickName} was banned from ${channelTitle}`,
+        chatId: channel.title,
+        senderId: getCurrentUser(),
+        text: `${nickName} was revoked from ${channel.title}`,
         system: true,
         createdAt: timestamp,
       });
       touchChannel(channel);
-      return;
-    }
+      $q.notify({
+        message: res.data.message,
+        color: 'warning',
+        icon: 'block',
+      });
 
-    if (channel.type === 'public') {
-      if (!channel.kicks[nickName]) {
-        channel.kicks[nickName] = new Set<string>();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        $q.notify({
+          type: 'negative',
+          message: err.message,
+        });
+        console.error(err);
       }
-      if (channel.kicks[nickName].has(me)) {
-        appendMessage(channelTitle, {
-          id: timestamp,
-          chatId: channelTitle,
-          senderId: me,
-          text: `${me}, you have already voted to kick ${nickName}`,
-          system: true,
-          createdAt: timestamp,
+    }
+  }
+
+  async function kick(nickName: string) {
+    if (!state.currentChannel) return;
+
+    try {
+      const res = await api.post('/channels/kick', {
+        channelId: getChannelByTitle(state.currentChannel)!.id,
+        nickName,
+      });
+      $q.notify({
+        icon: 'warning',
+        color: 'negative',
+        message: res.data.message,
+      });
+      await initialize();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        $q.notify({
+          type: 'negative',
+          message: err.message,
+        });
+        console.error(err);
+      }
+    }
+  }
+  async function quit() {
+    const channel = getChannelByTitle(state.currentChannel!);
+    if (!channel) return;
+    try {
+      await api.delete(`/channels/${channel.id}`);
+      state.channels = state.channels.filter(c => c.title !== channel.title);
+      delete state.messages[channel.title];
+      delete state.pendingMessages[channel.title];
+      state.currentChannel = null;
+      $q.notify({
+        type: 'negative',
+        message: `Channel #${channel.title} deleted`,
+        icon: 'delete'
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function cancel() {
+    const channel = getChannelByTitle(state.currentChannel!);
+    if (!channel) return;
+    try {
+      await api.post(`/channels/${channel.id}/leave`);
+      if (channel.admin !== getCurrentUser()) {
+        channel.members = channel.members.filter(m => m !== getCurrentUser());
+        state.currentChannel = null;
+        $q.notify({
+          type: 'info',
+          message: `You left #${channel.title}`,
+          icon: 'logout'
         });
         return;
       }
-      channel.kicks[nickName].add(me);
-      appendMessage(channelTitle, {
-        id: timestamp + 1,
-        chatId: channelTitle,
-        senderId: me,
-        text: `${me} voted to kick ${nickName} (${channel.kicks[nickName].size}/3)`,
-        system: true,
-        createdAt: timestamp + 1,
-      });
-      if (isAdmin || channel.kicks[nickName].size >= 3) {
-        channel.members = channel.members.filter((m) => m !== nickName);
-        if (!channel.banned.includes(nickName)) {
-          channel.banned.push(nickName);
-        }
-        appendMessage(channelTitle, {
-          id: timestamp + 2,
-          chatId: channelTitle,
-          senderId: me,
-          text: `${nickName} was banned from ${channelTitle}`,
-          system: true,
-          createdAt: timestamp + 2,
-        });
-      }
-      touchChannel(channel);
-    }
-  }
-  function quit() {
-    if (!state.currentChannel) return;
-    const channel = getChannelByTitle(state.currentChannel);
-    if (!channel || channel.admin !== getCurrentUser()) return;
-    state.channels = state.channels.filter((c) => c.title !== state.currentChannel);
-    delete state.messages[state.currentChannel];
-    delete state.pendingMessages[state.currentChannel];
-    state.currentChannel = null;
-  }
-
-  function cancel() {
-    if (!state.currentChannel) return;
-    const channel = getChannelByTitle(state.currentChannel);
-    if (!channel) return;
-    const me = getCurrentUser();
-    channel.members = channel.members.filter((m) => m !== me);
-    if (channel.admin === me) {
-      quit();
-    } else {
+      state.channels = state.channels.filter(c => c.title !== channel.title);
+      delete state.messages[channel.title];
       state.currentChannel = null;
+      $q.notify({
+        type: 'negative',
+        message: `Channel #${channel.title} closed`,
+        icon: 'delete'
+      });
+    } catch (err) {
+      console.error(err);
     }
   }
 
-  function processCommand(command: string) {
+
+  async function processCommand(command: string) {
     const parts = command.slice(1).trim().split(/\s+/);
     const cmd = parts[0];
     const arg = parts[1];
@@ -270,23 +311,23 @@ export const useChatStore = defineStore('chat', () => {
       case 'join':
         if (arg) {
           const isPrivate = opt ? /private|\[private\]/.test(opt) : false;
-          joinChannel(arg, isPrivate);
+          await joinChannel(arg, isPrivate);
         }
         break;
       case 'invite':
-        if (arg) invite(arg);
+        if (arg) await invite(arg);
         break;
       case 'revoke':
-        if (arg) revoke(arg);
+        if (arg) await revoke(arg);
         break;
       case 'kick':
         if (arg) kick(arg);
         break;
       case 'quit':
-        quit();
+        await quit();
         break;
       case 'cancel':
-        cancel();
+        await cancel();
         break;
       case 'list':
         listMembers();
@@ -399,33 +440,33 @@ export const useChatStore = defineStore('chat', () => {
     channel.inviteHighlighted = false;
   }
 
-  function receiveInvite(title: string, type: ChannelType) {
-    const me = getCurrentUser();
-    let channel = getChannelByTitle(title);
-    const timestamp = Date.now();
-    if (!channel) {
-      channel = {
-        title,
-        type,
-        admin: me,
-        members: [me],
-        banned: [],
-        kicks: {},
-        createdAt: timestamp,
-        lastActivityAt: timestamp,
-        inviteHighlighted: true,
-        inviteReceivedAt: timestamp,
-      };
-      state.channels.push(channel);
-      ensureMessageCollections(title);
-    } else {
-      if (!channel.members.includes(me)) {
-        channel.members.push(me);
-      }
-      channel.inviteHighlighted = true;
-      channel.inviteReceivedAt = timestamp;
-    }
-  }
+  // function receiveInvite(title: string, type: ChannelType) {
+  //   const me = getCurrentUser();
+  //   let channel = getChannelByTitle(title);
+  //   const timestamp = Date.now();
+  //   if (!channel) {
+  //     channel = {
+  //       title,
+  //       type,
+  //       admin: me,
+  //       members: [me],
+  //       banned: [],
+  //       kicks: {},
+  //       createdAt: timestamp,
+  //       lastActivityAt: timestamp,
+  //       inviteHighlighted: true,
+  //       inviteReceivedAt: timestamp,
+  //     };
+  //     state.channels.push(channel);
+  //     ensureMessageCollections(title);
+  //   } else {
+  //     if (!channel.members.includes(me)) {
+  //       channel.members.push(me);
+  //     }
+  //     channel.inviteHighlighted = true;
+  //     channel.inviteReceivedAt = timestamp;
+  //   }
+  // }
 
   function setTypingDraft(nickName: string, draft: string) {
     state.typingDrafts[nickName] = draft;
@@ -438,54 +479,23 @@ export const useChatStore = defineStore('chat', () => {
   function sendMessage(channelTitle: string, text: string) {
     pushMessage(channelTitle, getCurrentUser(), text);
   }
-  function initialize() {
-    if (state.channels.length > 0) return;
-
-    createChannel('general', 'public');
-    const generalChannel = getChannelByTitle('general');
-
-    if (generalChannel) {
-      ensureMember(generalChannel, 'Mira');
-      ensureMember(generalChannel, 'Noah');
-
-      for (let i = 1; i <= 50; i++) {
-        const sender = i % 2 === 0 ? 'Mira' : 'Noah';
-        pushMessage('general', sender, `(${i}) This is message number ${i} from ${sender}.`);
+  async function initialize() {
+    try {
+      const meResponse = await api.get('/user')
+      state.profile = {
+        firstName: meResponse.data.firstName,
+        lastName: meResponse.data.lastName,
+        nickName: meResponse.data.nickName,
+        email: meResponse.data.email,
       }
-    }
+      const channelsResponse = await api.get('/channels')
+      state.channels = channelsResponse.data.channels
 
-    createChannel('random', 'public');
-    const randomChannel = getChannelByTitle('random');
-    if (randomChannel) {
-      ensureMember(randomChannel, 'Kai');
-      pushMessage('random', 'Kai', 'Anyone up for a lunch walk today?');
-    }
+      console.log('Profile:', state.profile)
+      console.log('Channels:', state.channels)
 
-    createChannel('projects', 'private');
-    const projectsChannel = getChannelByTitle('projects');
-    if (projectsChannel) {
-      ensureMember(projectsChannel, 'Mira');
-      pushMessage(
-        'projects',
-        'Mira',
-        'Shipped the analytics dashboard update. QA is scheduled for tomorrow morning.',
-      );
-    }
-
-    createChannel('design-team', 'public');
-    const designChannel = getChannelByTitle('design-team');
-    if (designChannel) {
-      ensureMember(designChannel, 'lea');
-      ensureMember(designChannel, getCurrentUser(), true);
-      pushMessage('design-team', 'lea', '@alex.carter welcome to the design guild!');
-    }
-
-    if (state.channels.length > 0) {
-      const defaultChannel = getChannelByTitle('general') ?? state.channels[0];
-      state.currentChannel = defaultChannel ? defaultChannel.title : null;
-      if (state.currentChannel) {
-        initializeVisibleMessages(state.currentChannel);
-      }
+    } catch (e) {
+      console.error('Initialization error:', e)
     }
   }
 
@@ -586,7 +596,7 @@ export const useChatStore = defineStore('chat', () => {
     setStatus,
     setNotifyOnlyMentions,
     markInviteSeen,
-    receiveInvite,
+    //receiveInvite,
     listMembers,
     setTypingDraft,
     clearTypingDraft,

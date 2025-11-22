@@ -110,8 +110,8 @@ import type { Ref } from 'vue';
 
 const chatCommandsStore = useChatStore();
 
-onMounted(() => {
-  chatCommandsStore.initialize();
+onMounted(async () => {
+  await chatCommandsStore.initialize();
   simulateTyping(); 
   const current = chatCommandsStore.state.currentChannel
   if (current) {
@@ -245,7 +245,7 @@ async function sendMessage() {
   if (!message.value.trim()) return;
 
   if (message.value.startsWith('/')) {
-    chatCommandsStore.processCommand(message.value);
+    await chatCommandsStore.processCommand(message.value);
     showMenu.value = false;
   } else if (chatCommandsStore.state.currentChannel !== null) {
     chatCommandsStore.sendMessage(chatCommandsStore.state.currentChannel, message.value.trim());
