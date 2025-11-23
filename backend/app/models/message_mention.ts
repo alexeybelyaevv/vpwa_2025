@@ -6,7 +6,6 @@ import Message from '#models/message'
 import User from '#models/user'
 
 export default class MessageMention extends BaseModel {
-
   @column({ isPrimary: true })
   declare id: number
 
@@ -21,11 +20,10 @@ export default class MessageMention extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
-  
+
   @belongsTo(() => Message)
   declare message: BelongsTo<typeof Message>
 
-  
   @belongsTo(() => User, { foreignKey: 'mentionedUserId' })
   declare mentionedUser: BelongsTo<typeof User>
 }

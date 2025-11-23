@@ -6,7 +6,6 @@ import User from '#models/user'
 import Channel from '#models/channel'
 
 export default class ChannelMember extends BaseModel {
-
   @column({ isPrimary: true })
   declare id: number
 
@@ -28,7 +27,6 @@ export default class ChannelMember extends BaseModel {
   @belongsTo(() => User)
   declare user: BelongsTo<typeof User>
 
-  
   @belongsTo(() => Channel)
   declare channel: BelongsTo<typeof Channel>
 }

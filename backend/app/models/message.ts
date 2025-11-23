@@ -7,7 +7,6 @@ import Channel from '#models/channel'
 import MessageMention from '#models/message_mention'
 
 export default class Message extends BaseModel {
-
   @column({ isPrimary: true })
   declare id: number
 
@@ -29,11 +28,9 @@ export default class Message extends BaseModel {
   @belongsTo(() => User)
   declare user: BelongsTo<typeof User>
 
-  
   @belongsTo(() => Channel)
   declare channel: BelongsTo<typeof Channel>
 
-  
   @hasMany(() => MessageMention)
   declare mentions: HasMany<typeof MessageMention>
 }

@@ -6,7 +6,6 @@ import User from '#models/user'
 import Channel from '#models/channel'
 
 export default class ChannelBan extends BaseModel {
-
   @column({ isPrimary: true })
   declare id: number
 
@@ -14,25 +13,23 @@ export default class ChannelBan extends BaseModel {
   declare channelId: number
 
   @column()
-  declare userId: number       
+  declare userId: number
 
   @column()
-  declare bannedByUserId: number | null 
+  declare bannedByUserId: number | null
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
-  
+
   @belongsTo(() => Channel)
   declare channel: BelongsTo<typeof Channel>
 
-  
   @belongsTo(() => User, { foreignKey: 'userId' })
   declare bannedUser: BelongsTo<typeof User>
 
-  
   @belongsTo(() => User, { foreignKey: 'bannedByUserId' })
   declare bannedBy: BelongsTo<typeof User>
 }

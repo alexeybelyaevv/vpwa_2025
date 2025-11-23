@@ -18,7 +18,6 @@ const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
 })
 
 export default class User extends compose(BaseModel, AuthFinder) {
-
   @column({ isPrimary: true })
   declare id: number
 
@@ -41,7 +40,7 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare notifyOnlyMentions: boolean
 
   @column()
-  declare status: string 
+  declare status: string
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -60,35 +59,29 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @hasMany(() => Message)
   declare messages: HasMany<typeof Message>
 
-  
   @hasMany(() => ChannelMember)
   declare channelMembers: HasMany<typeof ChannelMember>
 
-  
   @hasMany(() => MessageMention, {
     foreignKey: 'mentionedUserId',
   })
   declare mentions: HasMany<typeof MessageMention>
 
-  
   @hasMany(() => ChannelKickVote, {
     foreignKey: 'voterUserId',
   })
   declare kickVotes: HasMany<typeof ChannelKickVote>
 
-  
   @hasMany(() => ChannelKickVote, {
     foreignKey: 'targetUserId',
   })
   declare kickVotesAgainst: HasMany<typeof ChannelKickVote>
 
-  
   @hasMany(() => ChannelBan, {
     foreignKey: 'bannedByUserId',
   })
   declare bansCreated: HasMany<typeof ChannelBan>
 
-  
   @hasMany(() => ChannelBan, {
     foreignKey: 'userId',
   })
