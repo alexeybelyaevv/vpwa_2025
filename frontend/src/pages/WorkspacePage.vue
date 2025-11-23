@@ -1,6 +1,11 @@
 <template>
   <div class="sl-workspace">
-    <sl-header class="sl-workspace__header" :is-mobile="isMobile" @toggle-nav="toggleMobileNav" />
+    <sl-header
+      class="sl-workspace__header"
+      :is-mobile="isMobile"
+      @toggle-nav="toggleMobileNav"
+      @logout="handleLogout"
+    />
     <q-drawer
       v-if="isMobile"
       v-model="showMobileNav"
@@ -220,21 +225,21 @@ import { useChatStore } from 'src/stores/chat-commands-store';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { chatTitleToSlug } from 'src/utils/chat';
-import { setUnauthorizedHandler } from 'src/api'
+import { setUnauthorizedHandler } from 'src/api';
 
-
-const router = useRouter()
-
-setUnauthorizedHandler(() => {
-  void router.push('/login')
-})
-const chatCommandsStore = useChatStore();
+const router = useRouter();
 const route = useRoute();
 const $q = useQuasar();
+const chatCommandsStore = useChatStore();
 
 const showMobileNav = ref(false);
 const isMobile = computed(() => $q.screen.lt.md);
 const searchTerm = ref('');
+const isSigningOut = ref(false);
+
+setUnauthorizedHandler(() => {
+  void performLogout(true, 'Session expired. Please log in again.');
+});
 
 const showCreateChannel = ref(false);
 const newChannelName = ref('');
@@ -320,6 +325,26 @@ const createChannelOptions = [
 
 const canSubmitChannel = computed(() => newChannelName.value.trim().length >= 2);
 
+async function performLogout(showNotification = true, message = 'You have been logged out') {
+  if (isSigningOut.value) return;
+  isSigningOut.value = true;
+  localStorage.removeItem('token');
+  chatCommandsStore.resetState();
+  showMobileNav.value = false;
+  if (showNotification) {
+    $q.notify({
+      type: 'info',
+      icon: 'logout',
+      message,
+    });
+  }
+  await router.replace('/login');
+}
+
+function handleLogout() {
+  void performLogout();
+}
+
 onMounted(async () => {
   await chatCommandsStore.initialize();
   syncChannelWithRoute();
@@ -335,6 +360,7 @@ watch(
 watch(
   () => chatCommandsStore.state.currentChannel,
   (newChannel) => {
+    if (isSigningOut.value) return;
     if (!newChannel) {
       if (route.name !== 'workspace') {
         void router.replace({ name: 'workspace' });
@@ -373,6 +399,7 @@ watch(newChannelName, () => {
 });
 
 function syncChannelWithRoute() {
+  if (isSigningOut.value) return;
   const slugParam = typeof route.params.chatSlug === 'string' ? route.params.chatSlug : null;
   const resolvedSlug = chatCommandsStore.selectChannelBySlug(slugParam);
   if (resolvedSlug && resolvedSlug !== slugParam) {
@@ -435,12 +462,12 @@ function promptManageChannel() {
   showManageConfirm.value = true;
 }
 
-function confirmManageChannel() {
+async function confirmManageChannel() {
   const channel = activeChannel.value;
   if (!channel) return;
   const wasAdmin = isCurrentAdmin.value;
   const title = channel.title;
-  chatCommandsStore.cancel();
+  await chatCommandsStore.cancel();
   $q.notify({
     icon: wasAdmin ? 'delete' : 'logout',
     color: wasAdmin ? 'negative' : 'info',

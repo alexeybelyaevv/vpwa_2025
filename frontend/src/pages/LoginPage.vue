@@ -139,6 +139,7 @@ async function handleLogin() {
     })
     chatCommandsStore.state.profile = response.data.user;
     console.log(chatCommandsStore.state.profile);
+    await chatCommandsStore.initialize();
     await router.push('/workspace')
 
   } catch (err: unknown) {

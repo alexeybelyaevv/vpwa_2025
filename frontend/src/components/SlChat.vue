@@ -112,7 +112,6 @@ const chatCommandsStore = useChatStore();
 
 onMounted(async () => {
   await chatCommandsStore.initialize();
-  simulateTyping(); 
   const current = chatCommandsStore.state.currentChannel
   if (current) {
     chatCommandsStore.initializeVisibleMessages(current)
@@ -125,7 +124,6 @@ const showMenu = ref(false);
 const inputRef: Ref<QInput | null> = ref(null);
 const highlightedIndex = ref(-1);
 const hoveredCommandIndex = ref<number | null>(null);
-const typingUser = ref<string | null>(null);
 const currentUser = computed(() => chatCommandsStore.state.profile.nickName);
 const isOffline = computed(() => chatCommandsStore.state.status === 'offline');
 const showTypingPreview = ref(false);
@@ -139,13 +137,11 @@ const typingPreviewText = computed(() => {
     'No live draft available yet.'
   );
 });
-const typingPreviewIntervals: Record<string, number> = {};
-const typingSentences = [
-  'Finalizing the release notes for tomorrow',
-  'Drafting the sprint retrospective summary',
-  'Reviewing the accessibility checklist update',
-  'Sketching new ideas for the mobile navigation',
-] as const;
+const typingUser = computed(() => {
+  const current = chatCommandsStore.state.currentChannel;
+  if (!current) return null;
+  return chatCommandsStore.state.typingIndicators[current] ?? null;
+});
 
 const inputElement = computed(() => {
   return inputRef.value?.$el.querySelector('input') || inputRef.value?.$el;
@@ -248,7 +244,7 @@ async function sendMessage() {
     await chatCommandsStore.processCommand(message.value);
     showMenu.value = false;
   } else if (chatCommandsStore.state.currentChannel !== null) {
-    chatCommandsStore.sendMessage(chatCommandsStore.state.currentChannel, message.value.trim());
+    await chatCommandsStore.sendMessage(chatCommandsStore.state.currentChannel, message.value.trim());
   }
 
   message.value = '';
@@ -260,52 +256,10 @@ async function sendMessage() {
 }
 
 function onUserTyping() {
-  if (typingUser.value) return;
-  if (Math.random() < 0.3) {
-    simulateTyping();
-  }
-}
-
-function startTypingPreview(user: string) {
-  stopTypingPreview(user);
-  const sentence = typingSentences[Math.floor(Math.random() * typingSentences.length)]!;
-  const words = sentence.split(' ');
-  let progress = 1;
-  chatCommandsStore.setTypingDraft(user, words.slice(0, progress).join(' '));
-  if (typeof window === 'undefined') {
-    return;
-  }
-  typingPreviewIntervals[user] = window.setInterval(() => {
-    progress = Math.min(progress + 1, words.length);
-    const text = words.slice(0, progress).join(' ');
-    const suffix = progress < words.length ? ' …' : '';
-    chatCommandsStore.setTypingDraft(user, `${text}${suffix}`);
-    if (progress >= words.length) {
-      progress = Math.max(1, Math.floor(words.length / 2));
-    }
-  }, 700);
-}
-
-function stopTypingPreview(user: string) {
-  const interval = typingPreviewIntervals[user];
-  if (interval) {
-    clearInterval(interval);
-    delete typingPreviewIntervals[user];
-  }
-  chatCommandsStore.clearTypingDraft(user);
-}
-
-function simulateTyping() {
-  if (typingUser.value) return;
-  const users = ['Ed', 'Alice', 'Bob'];
-  const user = users[Math.floor(Math.random() * users.length)]!;
-  typingUser.value = user;
-  startTypingPreview(user);
-  setTimeout(() => {
-    typingUser.value = null;
-    stopTypingPreview(user);
-    setTimeout(simulateTyping, Math.random() * 5000 + 2000);
-  }, 3000);
+  const channelTitle = chatCommandsStore.state.currentChannel;
+  if (!channelTitle) return;
+  chatCommandsStore.sendTypingSignal(channelTitle);
+  chatCommandsStore.sendDraftUpdate(channelTitle, message.value);
 }
 
 function openTypingPreview(nickname: string) {
@@ -352,9 +306,6 @@ watch(showTypingPreview, (visible) => {
 });
 
 onBeforeUnmount(() => {
-  Object.keys(typingPreviewIntervals).forEach((user) => {
-    stopTypingPreview(user);
-  });
 });
 
 watch(() => chatCommandsStore.state.currentChannel, async (newChannel) => {
