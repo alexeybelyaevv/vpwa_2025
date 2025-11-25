@@ -6,9 +6,12 @@
       class="q-pa-md"
       style="flex: 1;"
       :horizontal="false"
+      @scroll="handleScroll"
     >
       <q-infinite-scroll
         ref="infiniteScroll"
+        :scroll-target="scrollTarget"
+        :offset="50"
         @load="onLoadMessages"
         reverse
       >
@@ -114,7 +117,10 @@ onMounted(async () => {
   await chatCommandsStore.initialize();
   const current = chatCommandsStore.state.currentChannel
   if (current) {
-    chatCommandsStore.initializeVisibleMessages(current)
+    const visible = chatCommandsStore.state.visibleMessages[current];
+    if (!visible || visible.length === 0) {
+      await chatCommandsStore.initializeVisibleMessages(current);
+    }
   }
 });
 
@@ -147,23 +153,48 @@ const inputElement = computed(() => {
   return inputRef.value?.$el.querySelector('input') || inputRef.value?.$el;
 });
 const infiniteScroll = ref(null);
+const scrollTarget = computed(() => scrollArea.value?.getScrollTarget());
 
-async function onLoadMessages(index: number, done: () => void) {
-  if (!chatCommandsStore.state.currentChannel) {
+async function onLoadMessages(index: number, done: (stop?: boolean) => void) {
+  const channel = chatCommandsStore.state.currentChannel;
+  if (!channel) {
+    done(true);
+    return;
+  }
+
+  if (chatCommandsStore.state.historyLoading[channel]) {
     done();
     return;
   }
 
-  const scrollTarget = scrollArea.value?.getScrollTarget();
-  const oldHeight = scrollTarget?.scrollHeight ?? 0;
+  if (chatCommandsStore.state.historyComplete[channel]) {
+    done(true);
+    return;
+  }
 
-  await chatCommandsStore.loadOlderMessages(chatCommandsStore.state.currentChannel);
+  const previousCount = currentMessages.value.length;
+  const target = scrollArea.value?.getScrollTarget();
+  const oldHeight = target?.scrollHeight ?? 0;
+
+  try {
+    await chatCommandsStore.loadOlderMessages(channel);
+  } catch (error) {
+    console.error('Failed to load older messages', error);
+    done(true);
+    return;
+  }
 
   await nextTick();
 
-  const newHeight = scrollTarget?.scrollHeight ?? 0;
-  if (scrollTarget) {
-    scrollTarget.scrollTop = newHeight - oldHeight;
+  const newHeight = target?.scrollHeight ?? 0;
+  if (target) {
+    target.scrollTop = newHeight - oldHeight;
+  }
+
+  const newCount = currentMessages.value.length;
+  if (newCount === previousCount || chatCommandsStore.state.historyComplete[channel]) {
+    done(true);
+    return;
   }
 
   done();
@@ -235,6 +266,37 @@ function selectCommand(cmd: string) {
 
 function handleCommands() {
   showMenu.value = message.value.startsWith('/');
+}
+
+async function handleScroll({ verticalPosition }: { verticalPosition: number }) {
+  const channel = chatCommandsStore.state.currentChannel;
+  if (!channel) return;
+  if (verticalPosition > 20) return;
+  if (chatCommandsStore.state.historyLoading[channel] || chatCommandsStore.state.historyComplete[channel]) {
+    return;
+  }
+
+  const previousCount = currentMessages.value.length;
+  const target = scrollArea.value?.getScrollTarget();
+  const oldHeight = target?.scrollHeight ?? 0;
+
+  try {
+    await chatCommandsStore.loadOlderMessages(channel);
+  } catch (error) {
+    console.error('Failed to load older messages on scroll', error);
+    return;
+  }
+
+  await nextTick();
+
+  const newHeight = target?.scrollHeight ?? 0;
+  if (target) {
+    target.scrollTop = newHeight - oldHeight;
+  }
+
+  if (currentMessages.value.length === previousCount) {
+    chatCommandsStore.state.historyComplete[channel] = true;
+  }
 }
 
 async function sendMessage() {
@@ -310,7 +372,10 @@ onBeforeUnmount(() => {
 
 watch(() => chatCommandsStore.state.currentChannel, async (newChannel) => {
   if (newChannel) {
-    chatCommandsStore.initializeVisibleMessages(newChannel)
+    const visible = chatCommandsStore.state.visibleMessages[newChannel];
+    if (!visible || visible.length === 0) {
+      await chatCommandsStore.initializeVisibleMessages(newChannel);
+    }
 
     await nextTick()
     const scroll = scrollArea.value?.getScrollTarget()

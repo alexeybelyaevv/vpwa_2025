@@ -15,8 +15,11 @@ export const useChatStore = defineStore('chat', () => {
     channels: [] as Chat[],
     messages: {} as Record<string, Message[]>,
     visibleMessages: {} as Record<string, Message[]>,
-    visiblePosition: {} as Record<string, number>,
     pendingMessages: {} as Record<string, Message[]>,
+    oldestMessageId: {} as Record<string, number | null>,
+    historyComplete: {} as Record<string, boolean>,
+    historyLoading: {} as Record<string, boolean>,
+    historyInitialized: {} as Record<string, boolean>,
     currentChannel: null as string | null,
     profile: {
       firstName: '',
@@ -37,6 +40,43 @@ export const useChatStore = defineStore('chat', () => {
 
   function getCurrentUser(): string {
     return state.profile.nickName;
+  }
+
+  function isAppVisible(): boolean {
+    if (typeof $q.appVisible === 'boolean') {
+      return $q.appVisible;
+    }
+    if (typeof document !== 'undefined' && 'hidden' in document) {
+      return !document.hidden;
+    }
+    return true;
+  }
+
+  function supportsNativeNotifications(): boolean {
+    return typeof window !== 'undefined' && 'Notification' in window;
+  }
+
+  async function ensureNotificationPermission(): Promise<boolean> {
+    if (!supportsNativeNotifications()) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+  }
+
+  function isChannelMember(channel: Chat | undefined): boolean {
+    const current = getCurrentUser();
+    return Boolean(channel && current && channel.members.includes(current));
+  }
+
+  function pickDefaultChannelTitle(includePublicFallback = false): string | null {
+    const joined = state.channels.find((channel) => isChannelMember(channel));
+    if (joined) return joined.title;
+    if (includePublicFallback) {
+      const firstPublic = state.channels.find((channel) => channel.type === 'public');
+      if (firstPublic) return firstPublic.title;
+    }
+    return null;
   }
 
   function resetState() {
@@ -77,7 +117,7 @@ export const useChatStore = defineStore('chat', () => {
       state.profile = profile;
       state.channels = channels;
       if (!state.currentChannel && channels.length) {
-        state.currentChannel = channels[0].title;
+        state.currentChannel = pickDefaultChannelTitle();
       }
     });
 
@@ -121,21 +161,46 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function ensureSocket() {
-    if (socket) return;
     const token = localStorage.getItem('token');
-    if (!token) return;
-    socket = connectSocket(token);
-    bindSocketEvents(socket);
-    await new Promise<void>((resolve) => {
+    if (!token) {
+      throw new Error('No auth token');
+    }
+
+    if (!socket) {
+      socket = connectSocket(token);
+      bindSocketEvents(socket);
+    }
+
+    if (socket.connected) return;
+
+    await new Promise<void>((resolve, reject) => {
       if (!socket) {
-        resolve();
+        reject(new Error('Socket not available'));
         return;
       }
-      if (socket.connected) {
+
+      const onConnect = () => {
+        cleanup();
         resolve();
-        return;
-      }
-      socket.once('connect', () => resolve());
+      };
+      const onError = (err: unknown) => {
+        cleanup();
+        reject(err instanceof Error ? err : new Error('Socket connect error'));
+      };
+      const cleanup = () => {
+        window.clearTimeout(timeout);
+        socket?.off('connect', onConnect);
+        socket?.off('connect_error', onError);
+      };
+
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error('Socket connect timeout'));
+      }, 5000);
+
+      socket.once('connect', onConnect);
+      socket.once('connect_error', onError);
+      socket.connect();
     });
   }
 
@@ -145,28 +210,60 @@ export const useChatStore = defineStore('chat', () => {
     if (!sock) {
       throw new Error('Socket not connected');
     }
+    if (!sock.connected) {
+      throw new Error('Socket not connected');
+    }
     return new Promise<T>((resolve, reject) => {
-      sock.timeout(8000).emit(event, payload, (resp: { ok: boolean; error?: string; data?: T }) => {
-        if (!resp) {
-          resolve(undefined as T);
-          return;
-        }
-        if (!resp.ok) {
-          reject(new Error(resp.error || 'Request failed'));
-          return;
-        }
-        resolve(resp.data as T);
-      });
+      sock
+        .timeout(8000)
+        .emit(event, payload, (err: unknown, resp?: { ok: boolean; error?: string; data?: T }) => {
+          // Some socket.io transports pass only resp (without err), so normalize here
+          const respObj =
+            resp ||
+            (err && typeof err === 'object' && err !== null && 'ok' in (err as Error)
+              ? (err as { ok: boolean; error?: string; data?: T })
+              : undefined);
+          const errObj =
+            respObj && respObj.ok !== undefined ? undefined : err instanceof Error ? err : null;
+
+          if (errObj) {
+            reject(errObj);
+            return;
+          }
+          if (!respObj) {
+            reject(new Error('No response'));
+            return;
+          }
+          if (!respObj.ok) {
+            reject(new Error(respObj.error || 'Request failed'));
+            return;
+          }
+          resolve(respObj.data as T);
+        });
     });
   }
 
   function ensureMessageCollections(channelTitle: string) {
-    if (!state.messages[channelTitle]) {
-      state.messages[channelTitle] = [];
-    }
-    if (!state.pendingMessages[channelTitle]) {
-      state.pendingMessages[channelTitle] = [];
-    }
+    state.messages[channelTitle] = state.messages[channelTitle] || [];
+    state.visibleMessages[channelTitle] = state.visibleMessages[channelTitle] || [];
+    state.pendingMessages[channelTitle] = state.pendingMessages[channelTitle] || [];
+    if (state.oldestMessageId[channelTitle] === undefined)
+      state.oldestMessageId[channelTitle] = null;
+    if (state.historyComplete[channelTitle] === undefined)
+      state.historyComplete[channelTitle] = false;
+    if (state.historyLoading[channelTitle] === undefined)
+      state.historyLoading[channelTitle] = false;
+    if (state.historyInitialized[channelTitle] === undefined)
+      state.historyInitialized[channelTitle] = false;
+  }
+
+  function dedupeMessages(messages: Message[]) {
+    const seen = new Set<number>();
+    return messages.filter((msg) => {
+      if (seen.has(msg.id)) return false;
+      seen.add(msg.id);
+      return true;
+    });
   }
 
   function touchChannel(channel: Chat | undefined) {
@@ -176,13 +273,11 @@ export const useChatStore = defineStore('chat', () => {
 
   function appendMessage(channelTitle: string, message: Message) {
     ensureMessageCollections(channelTitle);
-    state.messages[channelTitle]?.push(message);
+    const alreadyExists = state.messages[channelTitle]!.some((m) => m.id === message.id);
+    if (alreadyExists) return;
+    state.messages[channelTitle]!.push(message);
     if (state.currentChannel === channelTitle) {
-      if (!state.visibleMessages[channelTitle]) {
-        initializeVisibleMessages(channelTitle);
-      } else {
-        state.visibleMessages[channelTitle].push(message);
-      }
+      state.visibleMessages[channelTitle] = [...state.messages[channelTitle]!];
     }
   }
 
@@ -202,37 +297,62 @@ export const useChatStore = defineStore('chat', () => {
     touchChannel(channel);
     if (isIncoming && channel) {
       const isMention = Boolean(message.mentioned?.includes(getCurrentUser()));
-      maybeNotify(channel, message, isMention);
+      void maybeNotify(channel, message, isMention);
     }
   }
-  function initializeVisibleMessages(channelTitle: string) {
+  async function initializeVisibleMessages(channelTitle: string) {
     ensureMessageCollections(channelTitle);
-    const all = state.messages[channelTitle] ?? [];
-    if (!all.length) {
-      const channel = state.channels.find((c) => c.title === channelTitle);
-      const channelId = channel?.id;
-      if (!channelId || !socket) {
-        state.visibleMessages[channelTitle] = [];
-        state.visiblePosition[channelTitle] = 0;
-        return;
-      }
-      void emitWithAck<Message[]>('messages:history', { channelId, limit: MESSAGES_BATCH_SIZE })
-        .then((messages) => {
-          if (!messages) return;
-          state.messages[channelTitle] = messages;
-          initializeVisibleMessages(channelTitle);
-        })
-        .catch((error) => {
-          console.error('Failed to load initial messages', error);
-        });
+    if (state.historyLoading[channelTitle]) return;
+
+    if (state.historyInitialized[channelTitle]) {
+      state.visibleMessages[channelTitle] = [...(state.messages[channelTitle] ?? [])];
       return;
     }
-    const total = all.length;
-    const start = Math.max(0, total - MESSAGES_BATCH_SIZE);
-    const initialVisible = all.slice(start);
 
-    state.visibleMessages[channelTitle] = [...initialVisible];
-    state.visiblePosition[channelTitle] = start;
+    await ensureSocket();
+    let channel = getChannelByTitle(channelTitle);
+    if (!channel) {
+      state.visibleMessages[channelTitle] = [];
+      state.historyComplete[channelTitle] = true;
+      state.oldestMessageId[channelTitle] = null;
+      return;
+    }
+
+    if (channel.type === 'public' && !isChannelMember(channel)) {
+      await joinChannel(channel.title, false);
+      channel = getChannelByTitle(channelTitle);
+      if (!channel || !isChannelMember(channel)) {
+        state.visibleMessages[channelTitle] = [];
+        state.historyComplete[channelTitle] = true;
+        state.historyInitialized[channelTitle] = true;
+        state.oldestMessageId[channelTitle] = null;
+        return;
+      }
+    }
+
+    const channelId = channel.id;
+
+    state.historyLoading[channelTitle] = true;
+    try {
+      const messages =
+        (await emitWithAck<Message[]>('messages:history', {
+          channelId,
+          limit: MESSAGES_BATCH_SIZE,
+        })) ?? [];
+      state.messages[channelTitle] = messages;
+      state.visibleMessages[channelTitle] = [...messages];
+      state.oldestMessageId[channelTitle] = messages[0]?.id ?? null;
+      state.historyComplete[channelTitle] = messages.length < MESSAGES_BATCH_SIZE;
+      state.historyInitialized[channelTitle] = true;
+    } catch (error) {
+      console.error('Failed to load initial messages', error);
+      state.visibleMessages[channelTitle] = [];
+      state.historyComplete[channelTitle] = false;
+      state.oldestMessageId[channelTitle] = null;
+      state.historyInitialized[channelTitle] = false;
+    } finally {
+      state.historyLoading[channelTitle] = false;
+    }
   }
   async function createChannel(title: string, type: ChannelType) {
     try {
@@ -478,15 +598,29 @@ export const useChatStore = defineStore('chat', () => {
   function shouldNotify(message: Message, isMention: boolean): boolean {
     if (message.system) return false;
     if (state.status === 'offline' || state.status === 'dnd') return false;
-    if (typeof document !== 'undefined' && !document.hidden) return false;
+    if (isAppVisible()) return false;
     if (state.notifyOnlyMentions && !isMention) return false;
+
     return true;
   }
 
-  function maybeNotify(channel: Chat, message: Message, isMention: boolean) {
+  async function maybeNotify(channel: Chat, message: Message, isMention: boolean) {
     if (!shouldNotify(message, isMention)) return;
     const snippet =
       message.text.length > 80 ? `${message.text.slice(0, 77).trimEnd()}...` : message.text;
+
+    const hasPermission = await ensureNotificationPermission();
+    if (hasPermission) {
+      try {
+        new Notification(`#${channel.title}`, {
+          body: `${message.senderId}: ${snippet}`,
+        });
+        return;
+      } catch (err) {
+        console.error('Native notification failed', err);
+      }
+    }
+
     $q.notify({
       message: `${message.senderId}: ${snippet}`,
       caption: `#${channel.title}`,
@@ -622,7 +756,12 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
       if (!state.currentChannel && state.channels.length) {
-        state.currentChannel = state.channels[0]?.title ?? null;
+        state.currentChannel = pickDefaultChannelTitle();
+      }
+
+      const current = state.currentChannel;
+      if (current) {
+        await initializeVisibleMessages(current);
       }
     } catch (e) {
       console.error('Initialization error:', e);
@@ -675,57 +814,46 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
 
-    state.currentChannel = state.channels[0]?.title || '';
-    return chatTitleToSlug(state.currentChannel);
+    state.currentChannel = pickDefaultChannelTitle();
+    return state.currentChannel ? chatTitleToSlug(state.currentChannel) : null;
   }
   async function loadOlderMessages(channelTitle: string) {
     ensureMessageCollections(channelTitle);
-    const all = state.messages[channelTitle] ?? [];
-    const visible = state.visibleMessages[channelTitle];
-    const pos = state.visiblePosition[channelTitle] ?? all.length;
+    if (state.historyComplete[channelTitle] || state.historyLoading[channelTitle]) return;
+    await ensureSocket();
 
-    if (!all || all.length === 0) {
-      initializeVisibleMessages(channelTitle);
-      return;
-    }
-    if (!visible) {
-      initializeVisibleMessages(channelTitle);
-      return;
-    }
+    const channel = state.channels.find((c) => c.title === channelTitle);
+    const channelId = channel?.id;
+    if (!channelId) return;
 
-    if (pos <= 0) {
-      const channel = state.channels.find((c) => c.title === channelTitle);
-      const channelId = channel?.id;
-      const oldest = visible[0];
-      if (!channelId || !oldest) return;
-      const older = await emitWithAck<Message[]>('messages:history', {
-        channelId,
-        beforeId: oldest.id,
-        limit: MESSAGES_BATCH_SIZE,
-      }).catch(() => null);
-      if (older && older.length) {
-        state.messages[channelTitle] = [...older, ...(state.messages[channelTitle] ?? [])];
-        state.visibleMessages[channelTitle] = [
-          ...older,
-          ...(state.visibleMessages[channelTitle] ?? []),
-        ];
-        state.visiblePosition[channelTitle] = 0;
+    const beforeId = state.oldestMessageId[channelTitle] ?? undefined;
+    state.historyLoading[channelTitle] = true;
+    try {
+      const older =
+        (await emitWithAck<Message[]>('messages:history', {
+          channelId,
+          beforeId,
+          limit: MESSAGES_BATCH_SIZE,
+        })) ?? [];
+      if (!older.length) {
+        state.historyComplete[channelTitle] = true;
+        state.historyInitialized[channelTitle] = true;
+        return;
       }
-      return;
+      const existing = state.messages[channelTitle] ?? [];
+      const merged = dedupeMessages([...older, ...existing]);
+      state.messages[channelTitle] = merged;
+      state.visibleMessages[channelTitle] = [...merged];
+      state.oldestMessageId[channelTitle] = state.messages[channelTitle][0]?.id ?? beforeId ?? null;
+      state.historyInitialized[channelTitle] = true;
+      if (older.length < MESSAGES_BATCH_SIZE) {
+        state.historyComplete[channelTitle] = true;
+      }
+    } catch (error) {
+      console.error('Failed to load older messages', error);
+    } finally {
+      state.historyLoading[channelTitle] = false;
     }
-
-    const start = Math.max(0, pos - MESSAGES_BATCH_SIZE);
-    const end = pos;
-    const olderMessages = all.slice(start, end);
-
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    state.visibleMessages[channelTitle] = [
-      ...olderMessages,
-      ...(state.visibleMessages[channelTitle] ?? []),
-    ];
-
-    state.visiblePosition[channelTitle] = start;
   }
   return {
     state,

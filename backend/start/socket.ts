@@ -200,16 +200,19 @@ async function handleChannelsList(socket: Socket, cb?: (resp: AckResponse) => vo
   const userId = socketToUser.get(socket.id)
   if (!userId) return ackError(cb, 'Unauthorized')
   await cleanupAndNotifyStaleChannels()
-  const memberships = await ChannelMember.query()
-    .where('user_id', userId)
-    .preload('channel', (query) => {
-      query
-        .preload('owner')
-        .preload('members', (q) => q.preload('user'))
-        .preload('bans', (q) => q.preload('bannedUser'))
-    })
+  const memberships = await ChannelMember.query().where('user_id', userId).preload('channel')
 
-  const channels = await Promise.all(memberships.map((m) => serializeChannel(m.channel)))
+  const memberChannels = memberships.map((m) => m.channel)
+  const memberChannelIds = new Set(memberChannels.map((c) => c.id))
+  const bans = await ChannelBan.query().where('user_id', userId).select('channel_id')
+  const bannedChannelIds = new Set(bans.map((ban) => ban.channelId))
+
+  const publicChannels = await Channel.query()
+    .where('type', 'public')
+    .whereNotIn('id', [...memberChannelIds, ...bannedChannelIds])
+
+  const combinedChannels = [...memberChannels, ...publicChannels]
+  const channels = await Promise.all(combinedChannels.map((channel) => serializeChannel(channel)))
   ackOk(cb, channels)
 }
 
@@ -293,7 +296,11 @@ function bootSocketServer() {
           role: 'admin',
         })
         const serialized = await serializeChannel(channel)
-        emitToUser(userId, 'channel:updated', serialized)
+        if (channel.type === 'public') {
+          io?.emit('channel:updated', serialized)
+        } else {
+          emitToUser(userId, 'channel:updated', serialized)
+        }
         ackOk(cb, serialized)
         return
       }
@@ -350,11 +357,16 @@ function bootSocketServer() {
         await ChannelKickVote.query().where('channel_id', channelId).delete()
         await ChannelBan.query().where('channel_id', channelId).delete()
         await channel.delete()
-        emitToUsers(
-          members.map((m) => m.id),
-          'channel:removed',
-          { id: channelId, title: channel.name }
-        )
+        const removalPayload = { id: channelId, title: channel.name }
+        if (channel.type === 'public') {
+          io?.emit('channel:removed', removalPayload)
+        } else {
+          emitToUsers(
+            members.map((m) => m.id),
+            'channel:removed',
+            removalPayload
+          )
+        }
         ackOk(cb, { removed: true })
         return
       }
