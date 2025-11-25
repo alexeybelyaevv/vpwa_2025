@@ -362,7 +362,7 @@ export const useChatStore = defineStore('chat', () => {
         isPrivate: type === 'private',
       });
       if (!channel) return;
-      state.channels.push(channel);
+      upsertChannel(channel);
       ensureMessageCollections(title);
       state.currentChannel = channel.title;
     } catch (err) {
