@@ -19,8 +19,10 @@
         <div class="sl-workspace__drawer-profile">
           <div class="sl-workspace__drawer-avatar">{{ profileInitials }}</div>
           <div class="sl-workspace__drawer-details">
-            <div class="sl-workspace__drawer-name">John Doe</div>
-            <div class="sl-workspace__drawer-role">{{ profileHandle }}</div>
+            <div class="sl-workspace__drawer-name">
+              {{ profile.firstName }} {{ profile.lastName }}
+            </div>
+            <div class="sl-workspace__drawer-role">@{{ profile.nickName }}</div>
           </div>
         </div>
 
@@ -255,7 +257,6 @@ const profileDisplayName = computed(() => {
   const full = `${firstName} ${lastName}`.trim();
   return full || nickName;
 });
-const profileHandle = computed(() => `@${profile.value.nickName}`);
 const profileInitials = computed(() => profileDisplayName.value.charAt(0).toUpperCase() || '@');
 
 function sortChannels(source: Chat[]): Chat[] {
@@ -268,9 +269,7 @@ function sortChannels(source: Chat[]): Chat[] {
 }
 
 const publicChannels = computed((): Chat[] => {
-  return sortChannels(
-    chatCommandsStore.state.channels.filter((chat) => chat.type === 'public'),
-  );
+  return sortChannels(chatCommandsStore.state.channels.filter((chat) => chat.type === 'public'));
 });
 
 const privateChannels = computed((): Chat[] => {

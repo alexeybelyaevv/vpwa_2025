@@ -39,8 +39,8 @@
       </div>
 
       <div class="sl-header__profile">
-        <span class="sl-header__profile-name">John Doe</span>
-        <span class="sl-header__profile-role">{{ displayHandle }}</span>
+        <span class="sl-header__profile-name">{{ profile.firstName }} {{ profile.lastName }}</span>
+        <span class="sl-header__profile-role">@{{ profile.nickName }}</span>
       </div>
 
       <q-btn
@@ -68,7 +68,9 @@
               clickable
               v-close-popup
               @click="selectStatus(status.value)"
-              :style="getMenuItemStyle(status.value === activeStatusValue, hoveredStatus === status.value)"
+              :style="
+                getMenuItemStyle(status.value === activeStatusValue, hoveredStatus === status.value)
+              "
               :class="{ 'q-item--active': status.value === activeStatusValue }"
               @mouseenter="hoveredStatus = status.value"
               @mouseleave="hoveredStatus = null"
@@ -179,8 +181,6 @@ const notifyOnlyMentions = computed({
 });
 
 const profile = computed(() => chatCommandsStore.state.profile);
-
-const displayHandle = computed(() => `@${profile.value.nickName}`);
 
 const isMobile = computed(() => props.isMobile);
 
@@ -460,7 +460,9 @@ function handleLogout() {
 
 :deep(.sl-header__menu-surface .q-item) {
   border-radius: 12px;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 :deep(.sl-header__menu-surface .q-item:hover) {
@@ -468,7 +470,11 @@ function handleLogout() {
 }
 
 :deep(.sl-header__menu-surface .q-item--active) {
-  background: linear-gradient(120deg, rgba(129, 140, 248, 0.45), rgba(59, 130, 246, 0.38)) !important;
+  background: linear-gradient(
+    120deg,
+    rgba(129, 140, 248, 0.45),
+    rgba(59, 130, 246, 0.38)
+  ) !important;
   color: #ffffff !important;
   box-shadow: 0 12px 28px rgba(18, 37, 87, 0.45);
 }
@@ -477,7 +483,6 @@ function handleLogout() {
   background-color: rgba(148, 163, 184, 0.18) !important;
   margin: 8px 0 !important;
 }
-
 
 @media (max-width: 900px) {
   .sl-header {
