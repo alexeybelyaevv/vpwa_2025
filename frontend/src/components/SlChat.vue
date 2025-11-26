@@ -1,6 +1,10 @@
 <template>
   <div class="sl-chat">
-    <sl-chat-header :chat-title="chatTitle" />
+    <sl-chat-header
+      :chat-title="chatTitle"
+      :typing-user="typingUser"
+      @open-preview="openTypingPreview"
+    />
     <q-scroll-area
       ref="scrollArea"
       class="q-pa-md"
@@ -46,10 +50,6 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-    <!-- Typing Indicator -->
-    <div v-if="typingUser" class="typing-indicator q-pa-sm">
-      {{ typingUser }} is typing...
-    </div>
     <div class="row items-center q-pa-sm input-container">
       <q-input
         ref="inputRef"
@@ -60,8 +60,6 @@
         class="col message-input"
         input-class="text-white"
         @keyup.enter="sendMessage"
-        @update:model-value="handleCommands"
-        @input="onUserTyping"
       >
         <template v-slot:append>
           <q-menu
@@ -104,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import SlMessagesList from './SlMessagesList.vue';
 import SlChatHeader from './SlChatHeader.vue';
 import { useChatStore } from 'src/stores/chat-commands-store';
@@ -264,8 +262,14 @@ function selectCommand(cmd: string) {
   highlightedIndex.value = -1;
 }
 
-function handleCommands() {
-  showMenu.value = message.value.startsWith('/');
+function syncTypingState(text: string) {
+  const channelTitle = chatCommandsStore.state.currentChannel;
+  if (!channelTitle) return;
+
+  if (text.length) {
+    void chatCommandsStore.sendTypingSignal(channelTitle);
+  }
+  void chatCommandsStore.sendDraftUpdate(channelTitle, text);
 }
 
 async function handleScroll({ verticalPosition }: { verticalPosition: number }) {
@@ -317,13 +321,6 @@ async function sendMessage() {
   }
 }
 
-function onUserTyping() {
-  const channelTitle = chatCommandsStore.state.currentChannel;
-  if (!channelTitle) return;
-  chatCommandsStore.sendTypingSignal(channelTitle);
-  chatCommandsStore.sendDraftUpdate(channelTitle, message.value);
-}
-
 function openTypingPreview(nickname: string) {
   typingPreviewUser.value = nickname;
   showTypingPreview.value = true;
@@ -350,6 +347,11 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
+watch(message, (val) => {
+  showMenu.value = val.startsWith('/');
+  syncTypingState(val);
+});
+
 watch(showMenu, (newValue) => {
   if (newValue) {
     document.addEventListener('keydown', handleKeydown);
@@ -365,9 +367,6 @@ watch(showTypingPreview, (visible) => {
   if (!visible) {
     typingPreviewUser.value = null;
   }
-});
-
-onBeforeUnmount(() => {
 });
 
 watch(() => chatCommandsStore.state.currentChannel, async (newChannel) => {

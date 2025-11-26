@@ -31,6 +31,7 @@ export const useChatStore = defineStore('chat', () => {
     notifyOnlyMentions: false,
     typingDrafts: {} as Record<string, string>,
     typingIndicators: {} as Record<string, string | null>,
+    pendingTypingIndicators: {} as Record<number, string | null>,
     peerStatuses: {} as Record<string, UserStatus | undefined>,
   });
 
@@ -96,26 +97,53 @@ export const useChatStore = defineStore('chat', () => {
     } else {
       state.channels.push(channel);
     }
+    syncPendingTypingForChannel(channel);
   }
 
   function removeChannel(channelId: number) {
+    const existing = getChannelById(channelId);
+    if (existing) {
+      delete state.typingIndicators[existing.title];
+    }
     state.channels = state.channels.filter((c) => c.id !== channelId);
+    delete state.pendingTypingIndicators[channelId];
   }
 
-  function setTypingIndicator(channelTitle: string, nickName: string) {
-    state.typingIndicators[channelTitle] = nickName;
-    if (typingTimeouts[channelTitle]) {
-      window.clearTimeout(typingTimeouts[channelTitle]);
+  function applyTypingIndicator(channelKey: string, nickName: string, channelId?: number) {
+    state.typingIndicators[channelKey] = nickName;
+    if (typingTimeouts[channelKey]) {
+      window.clearTimeout(typingTimeouts[channelKey]);
     }
-    typingTimeouts[channelTitle] = window.setTimeout(() => {
-      state.typingIndicators[channelTitle] = null;
+    typingTimeouts[channelKey] = window.setTimeout(() => {
+      state.typingIndicators[channelKey] = null;
+      if (channelId !== undefined && state.pendingTypingIndicators[channelId] === nickName) {
+        state.pendingTypingIndicators[channelId] = null;
+      }
     }, 3500);
+  }
+
+  function syncPendingTypingForChannel(channel: Chat) {
+    const pending = state.pendingTypingIndicators[channel.id];
+    if (!pending) return;
+    applyTypingIndicator(channel.title, pending, channel.id);
+  }
+
+  function syncAllPendingTyping() {
+    state.channels.forEach((channel) => syncPendingTypingForChannel(channel));
+  }
+
+  function setTypingIndicator(channelTitle: string, nickName: string, channelId?: number) {
+    if (channelId !== undefined) {
+      state.pendingTypingIndicators[channelId] = nickName;
+    }
+    applyTypingIndicator(channelTitle, nickName, channelId);
   }
 
   function bindSocketEvents(sock: Socket) {
     sock.on('session', ({ profile, channels }) => {
       state.profile = profile;
       state.channels = channels;
+      syncAllPendingTyping();
       if (!state.currentChannel && channels.length) {
         state.currentChannel = pickDefaultChannelTitle();
       }
@@ -146,16 +174,16 @@ export const useChatStore = defineStore('chat', () => {
 
     sock.on('typing', ({ channelId, nickName }: { channelId: number; nickName: string }) => {
       const channel = getChannelById(channelId);
-      if (!channel) return;
-      setTypingIndicator(channel.title, nickName);
+      setTypingIndicator(channel?.title ?? String(channelId), nickName, channelId);
     });
 
     sock.on(
       'draft:update',
       ({ channelId, nickName, text }: { channelId: number; nickName: string; text: string }) => {
         const channel = getChannelById(channelId);
-        if (!channel) return;
         setTypingDraft(nickName, text);
+        if (!channel) return;
+        touchChannel(channel);
       },
     );
   }
@@ -701,18 +729,28 @@ export const useChatStore = defineStore('chat', () => {
     delete state.typingDrafts[nickName];
   }
 
-  function sendTypingSignal(channelTitle: string) {
+  async function sendTypingSignal(channelTitle: string) {
     const channel = getChannelByTitle(channelTitle);
-    const sock = socket ?? getSocket();
-    if (!channel || !sock) return;
-    sock.emit('typing', { channelId: channel.id });
+    if (!channel) return;
+    try {
+      await ensureSocket();
+      const sock = socket ?? getSocket();
+      sock?.emit('typing', { channelId: channel.id });
+    } catch (err) {
+      console.error('Failed to send typing signal', err);
+    }
   }
 
-  function sendDraftUpdate(channelTitle: string, text: string) {
+  async function sendDraftUpdate(channelTitle: string, text: string) {
     const channel = getChannelByTitle(channelTitle);
-    const sock = socket ?? getSocket();
-    if (!channel || !sock) return;
-    sock.emit('draft:update', { channelId: channel.id, text });
+    if (!channel) return;
+    try {
+      await ensureSocket();
+      const sock = socket ?? getSocket();
+      sock?.emit('draft:update', { channelId: channel.id, text });
+    } catch (err) {
+      console.error('Failed to send draft update', err);
+    }
   }
 
   async function sendMessage(channelTitle: string, text: string) {
@@ -749,10 +787,12 @@ export const useChatStore = defineStore('chat', () => {
           const channels = await emitWithAck<Chat[]>('channel:list', {});
           if (channels) {
             state.channels = channels;
+            syncAllPendingTyping();
           }
         } catch {
           const channelsResponse = await api.get('/channels');
           state.channels = channelsResponse.data.channels;
+          syncAllPendingTyping();
         }
       }
       if (!state.currentChannel && state.channels.length) {
