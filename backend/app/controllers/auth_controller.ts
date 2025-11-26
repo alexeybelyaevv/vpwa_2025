@@ -6,7 +6,6 @@ import { loginValidator } from '#validators/login'
 
 export default class AuthController {
   public async register({ request, response }: HttpContext) {
-
     const payload = await request.validateUsing(registerValidator)
 
     const emailExists = await User.findBy('email', payload.email)
@@ -30,15 +29,15 @@ export default class AuthController {
     const token = await User.accessTokens.create(user)
 
     return response.created({
-    message: 'User registered',
-    token: token.value!.release(),
-    user: {
+      message: 'User registered',
+      token: token.value!.release(),
+      user: {
         id: user.id,
         nickName: user.nickname,
         email: user.email,
         firstName: user.firstName,
-        lastName: user.lastName
-    },
+        lastName: user.lastName,
+      },
     })
   }
   public async login({ request, response }: HttpContext) {
@@ -64,7 +63,7 @@ export default class AuthController {
         nickName: user.nickname,
         email: user.email,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
       },
     }
   }
@@ -79,5 +78,5 @@ export default class AuthController {
       nickName: user.nickname,
       email: user.email,
     })
-    }
+  }
 }

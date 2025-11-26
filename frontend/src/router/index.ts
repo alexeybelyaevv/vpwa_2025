@@ -33,5 +33,23 @@ export default defineRouter(function (/* { store, ssrContext } */) {
     history: createHistory(process.env.VUE_ROUTER_BASE),
   });
 
+  Router.beforeEach((to, from, next) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const isAuthRoute = ['/login', '/register'].includes(to.path);
+    const requiresAuth = to.matched.some((record) => record.path.startsWith('/workspace'));
+
+    if (!token && requiresAuth) {
+      next({ path: '/login', replace: true });
+      return;
+    }
+
+    if (token && isAuthRoute) {
+      next({ path: '/workspace', replace: true });
+      return;
+    }
+
+    next();
+  });
+
   return Router;
 });

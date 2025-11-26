@@ -9,12 +9,11 @@ import ChannelKickVote from '#models/channel_kick_vote'
 import ChannelBan from '#models/channel_ban'
 
 export default class Channel extends BaseModel {
-
   @column({ isPrimary: true })
   declare id: number
 
   @column()
-  declare name: string 
+  declare name: string
 
   @column()
   declare type: 'public' | 'private'
@@ -23,7 +22,7 @@ export default class Channel extends BaseModel {
   declare description: string | null
 
   @column()
-  declare ownerId: number 
+  declare ownerId: number
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -36,19 +35,15 @@ export default class Channel extends BaseModel {
   })
   declare owner: BelongsTo<typeof User>
 
-  
   @hasMany(() => ChannelMember)
   declare members: HasMany<typeof ChannelMember>
 
-  
   @hasMany(() => Message)
   declare messages: HasMany<typeof Message>
 
-  
   @hasMany(() => ChannelKickVote)
   declare kickVotes: HasMany<typeof ChannelKickVote>
 
-  
   @hasMany(() => ChannelBan)
   declare bans: HasMany<typeof ChannelBan>
 }

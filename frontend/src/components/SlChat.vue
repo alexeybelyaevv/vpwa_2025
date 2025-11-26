@@ -1,14 +1,21 @@
 <template>
   <div class="sl-chat">
-    <sl-chat-header :chat-title="chatTitle" />
+    <sl-chat-header
+      :chat-title="chatTitle"
+      :typing-user="typingUser"
+      @open-preview="openTypingPreview"
+    />
     <q-scroll-area
       ref="scrollArea"
       class="q-pa-md"
       style="flex: 1;"
       :horizontal="false"
+      @scroll="handleScroll"
     >
       <q-infinite-scroll
         ref="infiniteScroll"
+        :scroll-target="scrollTarget"
+        :offset="50"
         @load="onLoadMessages"
         reverse
       >
@@ -43,10 +50,6 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
-    <!-- Typing Indicator -->
-    <div v-if="typingUser" class="typing-indicator q-pa-sm">
-      {{ typingUser }} is typing...
-    </div>
     <div class="row items-center q-pa-sm input-container">
       <q-input
         ref="inputRef"
@@ -57,8 +60,6 @@
         class="col message-input"
         input-class="text-white"
         @keyup.enter="sendMessage"
-        @update:model-value="handleCommands"
-        @input="onUserTyping"
       >
         <template v-slot:append>
           <q-menu
@@ -101,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import SlMessagesList from './SlMessagesList.vue';
 import SlChatHeader from './SlChatHeader.vue';
 import { useChatStore } from 'src/stores/chat-commands-store';
@@ -112,10 +113,12 @@ const chatCommandsStore = useChatStore();
 
 onMounted(async () => {
   await chatCommandsStore.initialize();
-  simulateTyping(); 
   const current = chatCommandsStore.state.currentChannel
   if (current) {
-    chatCommandsStore.initializeVisibleMessages(current)
+    const visible = chatCommandsStore.state.visibleMessages[current];
+    if (!visible || visible.length === 0) {
+      await chatCommandsStore.initializeVisibleMessages(current);
+    }
   }
 });
 
@@ -125,7 +128,6 @@ const showMenu = ref(false);
 const inputRef: Ref<QInput | null> = ref(null);
 const highlightedIndex = ref(-1);
 const hoveredCommandIndex = ref<number | null>(null);
-const typingUser = ref<string | null>(null);
 const currentUser = computed(() => chatCommandsStore.state.profile.nickName);
 const isOffline = computed(() => chatCommandsStore.state.status === 'offline');
 const showTypingPreview = ref(false);
@@ -139,35 +141,58 @@ const typingPreviewText = computed(() => {
     'No live draft available yet.'
   );
 });
-const typingPreviewIntervals: Record<string, number> = {};
-const typingSentences = [
-  'Finalizing the release notes for tomorrow',
-  'Drafting the sprint retrospective summary',
-  'Reviewing the accessibility checklist update',
-  'Sketching new ideas for the mobile navigation',
-] as const;
+const typingUser = computed(() => {
+  const current = chatCommandsStore.state.currentChannel;
+  if (!current) return null;
+  return chatCommandsStore.state.typingIndicators[current] ?? null;
+});
 
 const inputElement = computed(() => {
   return inputRef.value?.$el.querySelector('input') || inputRef.value?.$el;
 });
 const infiniteScroll = ref(null);
+const scrollTarget = computed(() => scrollArea.value?.getScrollTarget());
 
-async function onLoadMessages(index: number, done: () => void) {
-  if (!chatCommandsStore.state.currentChannel) {
+async function onLoadMessages(index: number, done: (stop?: boolean) => void) {
+  const channel = chatCommandsStore.state.currentChannel;
+  if (!channel) {
+    done(true);
+    return;
+  }
+
+  if (chatCommandsStore.state.historyLoading[channel]) {
     done();
     return;
   }
 
-  const scrollTarget = scrollArea.value?.getScrollTarget();
-  const oldHeight = scrollTarget?.scrollHeight ?? 0;
+  if (chatCommandsStore.state.historyComplete[channel]) {
+    done(true);
+    return;
+  }
 
-  await chatCommandsStore.loadOlderMessages(chatCommandsStore.state.currentChannel);
+  const previousCount = currentMessages.value.length;
+  const target = scrollArea.value?.getScrollTarget();
+  const oldHeight = target?.scrollHeight ?? 0;
+
+  try {
+    await chatCommandsStore.loadOlderMessages(channel);
+  } catch (error) {
+    console.error('Failed to load older messages', error);
+    done(true);
+    return;
+  }
 
   await nextTick();
 
-  const newHeight = scrollTarget?.scrollHeight ?? 0;
-  if (scrollTarget) {
-    scrollTarget.scrollTop = newHeight - oldHeight;
+  const newHeight = target?.scrollHeight ?? 0;
+  if (target) {
+    target.scrollTop = newHeight - oldHeight;
+  }
+
+  const newCount = currentMessages.value.length;
+  if (newCount === previousCount || chatCommandsStore.state.historyComplete[channel]) {
+    done(true);
+    return;
   }
 
   done();
@@ -237,8 +262,45 @@ function selectCommand(cmd: string) {
   highlightedIndex.value = -1;
 }
 
-function handleCommands() {
-  showMenu.value = message.value.startsWith('/');
+function syncTypingState(text: string) {
+  const channelTitle = chatCommandsStore.state.currentChannel;
+  if (!channelTitle) return;
+
+  if (text.length) {
+    void chatCommandsStore.sendTypingSignal(channelTitle);
+  }
+  void chatCommandsStore.sendDraftUpdate(channelTitle, text);
+}
+
+async function handleScroll({ verticalPosition }: { verticalPosition: number }) {
+  const channel = chatCommandsStore.state.currentChannel;
+  if (!channel) return;
+  if (verticalPosition > 20) return;
+  if (chatCommandsStore.state.historyLoading[channel] || chatCommandsStore.state.historyComplete[channel]) {
+    return;
+  }
+
+  const previousCount = currentMessages.value.length;
+  const target = scrollArea.value?.getScrollTarget();
+  const oldHeight = target?.scrollHeight ?? 0;
+
+  try {
+    await chatCommandsStore.loadOlderMessages(channel);
+  } catch (error) {
+    console.error('Failed to load older messages on scroll', error);
+    return;
+  }
+
+  await nextTick();
+
+  const newHeight = target?.scrollHeight ?? 0;
+  if (target) {
+    target.scrollTop = newHeight - oldHeight;
+  }
+
+  if (currentMessages.value.length === previousCount) {
+    chatCommandsStore.state.historyComplete[channel] = true;
+  }
 }
 
 async function sendMessage() {
@@ -248,7 +310,7 @@ async function sendMessage() {
     await chatCommandsStore.processCommand(message.value);
     showMenu.value = false;
   } else if (chatCommandsStore.state.currentChannel !== null) {
-    chatCommandsStore.sendMessage(chatCommandsStore.state.currentChannel, message.value.trim());
+    await chatCommandsStore.sendMessage(chatCommandsStore.state.currentChannel, message.value.trim());
   }
 
   message.value = '';
@@ -257,55 +319,6 @@ async function sendMessage() {
   if (scroll) {
     scroll.scrollTop = scroll.scrollHeight;
   }
-}
-
-function onUserTyping() {
-  if (typingUser.value) return;
-  if (Math.random() < 0.3) {
-    simulateTyping();
-  }
-}
-
-function startTypingPreview(user: string) {
-  stopTypingPreview(user);
-  const sentence = typingSentences[Math.floor(Math.random() * typingSentences.length)]!;
-  const words = sentence.split(' ');
-  let progress = 1;
-  chatCommandsStore.setTypingDraft(user, words.slice(0, progress).join(' '));
-  if (typeof window === 'undefined') {
-    return;
-  }
-  typingPreviewIntervals[user] = window.setInterval(() => {
-    progress = Math.min(progress + 1, words.length);
-    const text = words.slice(0, progress).join(' ');
-    const suffix = progress < words.length ? ' …' : '';
-    chatCommandsStore.setTypingDraft(user, `${text}${suffix}`);
-    if (progress >= words.length) {
-      progress = Math.max(1, Math.floor(words.length / 2));
-    }
-  }, 700);
-}
-
-function stopTypingPreview(user: string) {
-  const interval = typingPreviewIntervals[user];
-  if (interval) {
-    clearInterval(interval);
-    delete typingPreviewIntervals[user];
-  }
-  chatCommandsStore.clearTypingDraft(user);
-}
-
-function simulateTyping() {
-  if (typingUser.value) return;
-  const users = ['Ed', 'Alice', 'Bob'];
-  const user = users[Math.floor(Math.random() * users.length)]!;
-  typingUser.value = user;
-  startTypingPreview(user);
-  setTimeout(() => {
-    typingUser.value = null;
-    stopTypingPreview(user);
-    setTimeout(simulateTyping, Math.random() * 5000 + 2000);
-  }, 3000);
 }
 
 function openTypingPreview(nickname: string) {
@@ -334,6 +347,11 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
+watch(message, (val) => {
+  showMenu.value = val.startsWith('/');
+  syncTypingState(val);
+});
+
 watch(showMenu, (newValue) => {
   if (newValue) {
     document.addEventListener('keydown', handleKeydown);
@@ -351,15 +369,12 @@ watch(showTypingPreview, (visible) => {
   }
 });
 
-onBeforeUnmount(() => {
-  Object.keys(typingPreviewIntervals).forEach((user) => {
-    stopTypingPreview(user);
-  });
-});
-
 watch(() => chatCommandsStore.state.currentChannel, async (newChannel) => {
   if (newChannel) {
-    chatCommandsStore.initializeVisibleMessages(newChannel)
+    const visible = chatCommandsStore.state.visibleMessages[newChannel];
+    if (!visible || visible.length === 0) {
+      await chatCommandsStore.initializeVisibleMessages(newChannel);
+    }
 
     await nextTick()
     const scroll = scrollArea.value?.getScrollTarget()

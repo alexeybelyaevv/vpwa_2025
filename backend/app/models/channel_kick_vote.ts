@@ -6,7 +6,6 @@ import User from '#models/user'
 import Channel from '#models/channel'
 
 export default class ChannelKickVote extends BaseModel {
-
   @column({ isPrimary: true })
   declare id: number
 
@@ -14,10 +13,10 @@ export default class ChannelKickVote extends BaseModel {
   declare channelId: number
 
   @column()
-  declare voterUserId: number 
+  declare voterUserId: number
 
   @column()
-  declare targetUserId: number 
+  declare targetUserId: number
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -28,11 +27,9 @@ export default class ChannelKickVote extends BaseModel {
   @belongsTo(() => Channel)
   declare channel: BelongsTo<typeof Channel>
 
-  
   @belongsTo(() => User, { foreignKey: 'voterUserId' })
   declare voter: BelongsTo<typeof User>
 
-  
   @belongsTo(() => User, { foreignKey: 'targetUserId' })
   declare target: BelongsTo<typeof User>
 }

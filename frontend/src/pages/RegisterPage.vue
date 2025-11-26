@@ -209,7 +209,8 @@ async function handleRegister() {
     console.log('Backend response:', res.data);
     localStorage.setItem('token', res.data.token)
     chatCommandsStore.state.profile = res.data.user;
-    await router.push('/workspace');
+    void router.replace('/workspace');
+    void chatCommandsStore.initialize();
   } catch (err: unknown) {
   const error = err as AxiosError<BackendError>;
 

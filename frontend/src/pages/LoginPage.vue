@@ -52,13 +52,7 @@
 
         <q-card-section class="footer-section column items-center text-center q-gutter-xs">
           <div class="text-caption muted">Need an account?</div>
-          <q-btn
-            flat
-            color="primary"
-            label="Register"
-            class="q-pa-none"
-            @click="goToRegister"
-          />
+          <q-btn flat color="primary" label="Register" class="q-pa-none" @click="goToRegister" />
         </q-card-section>
       </q-card>
     </div>
@@ -72,13 +66,13 @@ defineOptions({
 
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { type AxiosError } from 'axios'
-import { useQuasar } from 'quasar'
-import { api } from '../api'
+import { type AxiosError } from 'axios';
+import { useQuasar } from 'quasar';
+import { api } from '../api';
 import { useChatStore } from 'src/stores/chat-commands-store';
 const chatCommandsStore = useChatStore();
 const router = useRouter();
-const $q = useQuasar()
+const $q = useQuasar();
 
 const loginEmail = ref('');
 const loginPassword = ref('');
@@ -126,29 +120,29 @@ async function handleLogin() {
     const response = await api.post('/login', {
       email: loginEmail.value.trim(),
       password: loginPassword.value,
-    })
+    });
 
-    console.log('LOGIN SUCCESS:', response.data)
+    console.log('LOGIN SUCCESS:', response.data);
 
-    localStorage.setItem('token', response.data.token)
+    localStorage.setItem('token', response.data.token);
 
     $q.notify({
       type: 'positive',
       message: 'Login successful',
-      icon: 'check'
-    })
+      icon: 'check',
+    });
     chatCommandsStore.state.profile = response.data.user;
     console.log(chatCommandsStore.state.profile);
-    await router.push('/workspace')
-
+    void router.replace('/workspace');
+    void chatCommandsStore.initialize();
   } catch (err: unknown) {
-    const error = err as AxiosError<{ error: string }>
+    const error = err as AxiosError<{ error: string }>;
 
     $q.notify({
       type: 'negative',
       message: error.response?.data?.error || 'Login failed',
-      icon: 'warning'
-    })
+      icon: 'warning',
+    });
   }
 }
 
@@ -161,7 +155,13 @@ function goToRegister() {
 .login-page {
   min-height: 100vh;
   padding: 48px 24px;
-  background: radial-gradient(circle at top left, #5865f2 0%, rgba(88, 101, 242, 0.18) 35%, #1e1f22 80%, #1a1b1e 100%);
+  background: radial-gradient(
+    circle at top left,
+    #5865f2 0%,
+    rgba(88, 101, 242, 0.18) 35%,
+    #1e1f22 80%,
+    #1a1b1e 100%
+  );
   color: #f2f3f5;
 }
 
