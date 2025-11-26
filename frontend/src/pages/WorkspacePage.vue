@@ -269,7 +269,11 @@ function sortChannels(source: Chat[]): Chat[] {
 }
 
 const publicChannels = computed((): Chat[] => {
-  return sortChannels(chatCommandsStore.state.channels.filter((chat) => chat.type === 'public'));
+  return sortChannels(
+    chatCommandsStore.state.channels.filter(
+      (chat) => chat.type === 'public' && chat.members.includes(currentUserNick.value),
+    ),
+  );
 });
 
 const privateChannels = computed((): Chat[] => {

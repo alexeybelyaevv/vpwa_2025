@@ -801,7 +801,7 @@ export const useChatStore = defineStore('chat', () => {
 
     if (slug) {
       const channel = state.channels.find((c) => chatTitleToSlug(c.title) === slug);
-      if (channel) {
+      if (channel && isChannelMember(channel)) {
         state.currentChannel = channel.title;
         return chatTitleToSlug(channel.title);
       }
