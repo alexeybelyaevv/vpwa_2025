@@ -525,6 +525,18 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
   }
+  function resetChannelState(title: string) {
+    delete state.messages[title];
+    delete state.visibleMessages[title];
+    delete state.pendingMessages[title];
+    delete state.oldestMessageId[title];
+    delete state.historyComplete[title];
+    delete state.historyLoading[title];
+    delete state.historyInitialized[title];
+    delete state.typingDrafts[title];
+    delete state.typingIndicators[title];
+    delete state.peerStatuses[title];
+  }
   async function quit() {
     const channel = getChannelByTitle(state.currentChannel!);
     if (!channel) return;
@@ -532,8 +544,7 @@ export const useChatStore = defineStore('chat', () => {
       await ensureSocket();
       await emitWithAck('channel:leave', { channelId: channel.id });
       state.channels = state.channels.filter((c) => c.title !== channel.title);
-      delete state.messages[channel.title];
-      delete state.pendingMessages[channel.title];
+      resetChannelState(channel.title);
       state.currentChannel = null;
       $q.notify({
         type: 'negative',
@@ -562,7 +573,7 @@ export const useChatStore = defineStore('chat', () => {
         return;
       }
       state.channels = state.channels.filter((c) => c.title !== channel.title);
-      delete state.messages[channel.title];
+      resetChannelState(channel.title);
       state.currentChannel = null;
       $q.notify({
         type: 'negative',
