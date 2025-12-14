@@ -59,6 +59,7 @@
         dense
         class="col message-input"
         input-class="text-white"
+        :disable="isOffline"
         @keyup.enter="sendMessage"
       >
         <template v-slot:append>
@@ -95,6 +96,7 @@
       <q-btn
         class="q-ml-sm send-btn"
         label="Send"
+        :disable="isOffline"
         @click="sendMessage"
       />
     </div>

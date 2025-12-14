@@ -165,7 +165,7 @@ type StatusValue = (typeof statuses)[number]['value'];
 const activeStatusValue = computed<StatusValue>({
   get: () => chatCommandsStore.state.status as StatusValue,
   set: (value) => {
-    chatCommandsStore.setStatus(value);
+    void chatCommandsStore.setStatus(value);
   },
 });
 
@@ -405,6 +405,7 @@ function handleLogout() {
 
 .sl-header__status-text {
   font-size: 13px;
+  white-space: nowrap;
   font-weight: 600;
   letter-spacing: 0.02em;
 }

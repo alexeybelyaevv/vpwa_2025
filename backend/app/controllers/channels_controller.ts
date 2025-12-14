@@ -61,13 +61,12 @@ export default class ChannelsController {
 
     const memberChannels = memberships.map((membership) => membership.channel)
     const memberChannelIds = new Set(memberChannels.map((channel) => channel.id))
-    const bannedChannelIds = new Set(
-      (
-        await ChannelBan.query()
-          .where('user_id', user.id)
-          .select('channel_id')
-      ).map((ban) => ban.channelId)
-    )
+
+    const channelIdsWithUser = await ChannelBan.query()
+      .where('user_id', user.id)
+      .select('channel_id')
+
+    const bannedChannelIds = new Set(channelIdsWithUser.map((ban) => ban.channelId))
 
     const publicChannels = await Channel.query()
       .where('type', 'public')
@@ -81,7 +80,6 @@ export default class ChannelsController {
       })
 
     const channels = [...memberChannels, ...publicChannels].map((channel) => {
-
       const membersNicknames = channel.members.map((cm) => cm.user.nickname)
       const bannedNicknames = channel.bans.map((ban) => ban.bannedUser.nickname)
 

@@ -189,6 +189,9 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function ensureSocket() {
+    if (state.status === 'offline') {
+      throw new Error('Offline mode: switch status to Online or Do Not Disturb to reconnect');
+    }
     const token = localStorage.getItem('token');
     if (!token) {
       throw new Error('No auth token');
@@ -331,6 +334,8 @@ export const useChatStore = defineStore('chat', () => {
   async function initializeVisibleMessages(channelTitle: string) {
     ensureMessageCollections(channelTitle);
     if (state.historyLoading[channelTitle]) return;
+
+    if (state.status === 'offline') return;
 
     if (state.historyInitialized[channelTitle]) {
       state.visibleMessages[channelTitle] = [...(state.messages[channelTitle] ?? [])];
@@ -611,8 +616,14 @@ export const useChatStore = defineStore('chat', () => {
     if (!state.currentChannel) return;
     const channel = getChannelByTitle(state.currentChannel);
     if (!channel) return;
+    const memberStatus = (nick: string): UserStatus => {
+      if (nick === getCurrentUser()) return state.status;
+      return state.peerStatuses[nick] ?? 'offline';
+    };
     const timestamp = Date.now();
-    const membersList = channel.members.join(', ');
+    const membersList = channel.members
+      .map((nick) => `${nick} (${memberStatus(nick)})`)
+      .join(', ');
     appendMessage(channel.title, {
       id: timestamp,
       chatId: channel.title,
@@ -671,13 +682,31 @@ export const useChatStore = defineStore('chat', () => {
     });
   }
 
-  function setStatus(status: UserStatus) {
+  async function setStatus(status: UserStatus) {
     if (state.status === status) return;
     state.status = status;
-    const sock = socket ?? getSocket();
-    sock?.emit('status:update', { status, notifyOnlyMentions: state.notifyOnlyMentions });
-    if (status === 'online') {
-      flushPendingMessages();
+
+    if (status === 'offline') {
+      const sock = socket ?? getSocket();
+      try {
+        sock?.emit('status:update', { status, notifyOnlyMentions: state.notifyOnlyMentions });
+      } catch (err) {
+        console.error('Failed to propagate offline status', err);
+      }
+      disconnectSocket();
+      socket = null;
+      return;
+    }
+
+    try {
+      await ensureSocket();
+      const sock = socket ?? getSocket();
+      sock?.emit('status:update', { status, notifyOnlyMentions: state.notifyOnlyMentions });
+      if (status === 'online') {
+        flushPendingMessages();
+      }
+    } catch (err) {
+      console.error('Failed to update status', err);
     }
   }
 
@@ -730,6 +759,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendTypingSignal(channelTitle: string) {
+    if (state.status === 'offline') return;
     const channel = getChannelByTitle(channelTitle);
     if (!channel) return;
     try {
@@ -742,6 +772,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendDraftUpdate(channelTitle: string, text: string) {
+    if (state.status === 'offline') return;
     const channel = getChannelByTitle(channelTitle);
     if (!channel) return;
     try {
@@ -754,7 +785,19 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendMessage(channelTitle: string, text: string) {
-    await ensureSocket();
+    if (state.status === 'offline') {
+      $q.notify({ type: 'warning', message: 'You are offline. Switch status to send messages.' });
+      return;
+    }
+    try {
+      await ensureSocket();
+    } catch (error) {
+      console.error(error);
+      if (error instanceof Error) {
+        $q.notify({ type: 'negative', message: error.message });
+      }
+      return;
+    }
     const channel = getChannelByTitle(channelTitle);
     if (!channel) return;
     try {
@@ -860,6 +903,7 @@ export const useChatStore = defineStore('chat', () => {
   async function loadOlderMessages(channelTitle: string) {
     ensureMessageCollections(channelTitle);
     if (state.historyComplete[channelTitle] || state.historyLoading[channelTitle]) return;
+    if (state.status === 'offline') return;
     await ensureSocket();
 
     const channel = state.channels.find((c) => c.title === channelTitle);
