@@ -359,6 +359,13 @@ watch(
 );
 
 watch(
+  () => chatCommandsStore.state.channels.length,
+  () => {
+    syncChannelWithRoute();
+  },
+);
+
+watch(
   () => chatCommandsStore.state.currentChannel,
   (newChannel) => {
     if (isSigningOut.value) return;
@@ -405,6 +412,12 @@ function syncChannelWithRoute() {
   const resolvedSlug = chatCommandsStore.selectChannelBySlug(slugParam);
   if (resolvedSlug && resolvedSlug !== slugParam) {
     void router.replace({ name: 'workspace-chat', params: { chatSlug: resolvedSlug } });
+  }
+  if (!resolvedSlug && !slugParam && chatCommandsStore.state.channels.length) {
+    const fallback = chatCommandsStore.selectChannelBySlug(null);
+    if (fallback) {
+      void router.replace({ name: 'workspace-chat', params: { chatSlug: fallback } });
+    }
   }
   if (
     !resolvedSlug &&

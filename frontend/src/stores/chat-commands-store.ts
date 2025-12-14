@@ -810,12 +810,21 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   async function initialize() {
-    try {
-      await ensureSocket();
-      const token = localStorage.getItem('token');
-      if (!token) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
-      if (!state.profile.nickName) {
+    const isOfflineMode = state.status === 'offline';
+
+    if (!isOfflineMode) {
+      try {
+        await ensureSocket();
+      } catch (e) {
+        console.error('Initialization socket error:', e);
+      }
+    }
+
+    if (!state.profile.nickName && !isOfflineMode) {
+      try {
         const meResponse = await api.get('/user');
         state.profile = {
           firstName: meResponse.data.firstName,
@@ -823,31 +832,45 @@ export const useChatStore = defineStore('chat', () => {
           nickName: meResponse.data.nickName,
           email: meResponse.data.email,
         };
+      } catch (e) {
+        console.error('Profile load error:', e);
       }
+    }
 
-      if (!state.channels.length) {
+    const loadChannelsFromApi = async () => {
+      const channelsResponse = await api.get('/channels');
+      state.channels = channelsResponse.data.channels;
+      syncAllPendingTyping();
+    };
+
+    if (!state.channels.length) {
+      if (!isOfflineMode) {
         try {
           const channels = await emitWithAck<Chat[]>('channel:list', {});
           if (channels) {
             state.channels = channels;
             syncAllPendingTyping();
           }
-        } catch {
-          const channelsResponse = await api.get('/channels');
-          state.channels = channelsResponse.data.channels;
-          syncAllPendingTyping();
+        } catch (err) {
+          console.error('Socket channel:list failed, falling back to HTTP:', err);
+          try {
+            await loadChannelsFromApi();
+          } catch (apiErr) {
+            console.error('Failed to load channels via HTTP:', apiErr);
+          }
+        }
+      } else {
+        try {
+          await loadChannelsFromApi();
+        } catch (apiErr) {
+          console.error('Offline channel load failed (cache maybe missing):', apiErr);
         }
       }
-      if (!state.currentChannel && state.channels.length) {
-        state.currentChannel = pickDefaultChannelTitle();
-      }
+    }
 
-      const current = state.currentChannel;
-      if (current) {
-        await initializeVisibleMessages(current);
-      }
-    } catch (e) {
-      console.error('Initialization error:', e);
+    const current = state.currentChannel;
+    if (current && !isOfflineMode) {
+      await initializeVisibleMessages(current);
     }
   }
 
@@ -878,8 +901,8 @@ export const useChatStore = defineStore('chat', () => {
 
   function selectChannelBySlug(slug: string | null | undefined): string | null {
     if (!state.channels.length) {
-      state.currentChannel = null;
-      return null;
+      // channels not ready yet — keep current selection and route as-is
+      return slug ?? null;
     }
 
     if (slug) {
@@ -897,8 +920,9 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
 
-    state.currentChannel = pickDefaultChannelTitle();
-    return state.currentChannel ? chatTitleToSlug(state.currentChannel) : null;
+    const fallback = pickDefaultChannelTitle();
+    state.currentChannel = fallback;
+    return fallback ? chatTitleToSlug(fallback) : null;
   }
   async function loadOlderMessages(channelTitle: string) {
     ensureMessageCollections(channelTitle);
